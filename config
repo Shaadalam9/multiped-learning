@@ -1,0 +1,19 @@
+{
+  "mapping": "mapping.csv",
+  "plotly_template": "plotly_white",
+  "output": "_output",
+  "figures": "figures",
+  "data": "/Users/salam/Library/CloudStorage/OneDrive-TUEindhoven/TUe Multiped/Data_unshuffled/participant_response",
+  "intake_questionnaire": "/Users/salam/Library/CloudStorage/OneDrive-TUEindhoven/TUe Multiped/Data_unshuffled/intake_questionnaire.csv",
+  "post_experiment_questionnaire": "/Users/salam/Library/CloudStorage/OneDrive-TUEindhoven/TUe Multiped/Data_unshuffled/post_experiment.csv",
+  "always_analyse": true,
+  "kp_resolution": 100,
+  "yaw_resolution": 100,
+  "smoothen_signal": true,
+  "freq": 120,
+  "mincutoff": 0.1,
+  "beta": 0.1,
+  "font_family": "Times New Roman",
+  "font_size": 18,
+  "p_value": 0.001
+}

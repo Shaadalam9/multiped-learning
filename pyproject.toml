@@ -1,0 +1,17 @@
+[project]
+name = "multiped"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = "==3.9.11"
+dependencies = [
+    "flake8==7.1.1",
+    "kaleido==0.2.1",
+    "numpy==2.0.1",
+    "oneeurofilter==0.2.1",
+    "pandas==2.2.2",
+    "plotly==5.23.0",
+    "scikit-learn==1.6.0",
+    "scipy==1.13.1",
+    "tqdm==4.66.5",
+]
