@@ -13,12 +13,62 @@ from custom_logger import CustomLogger
 import re
 import numpy as np
 from scipy.stats import ttest_rel, ttest_ind
-from utils.HMD_helper import HMD_yaw
-from utils.tools import Tools
+# This project is sometimes run with different repository layouts:
+# some copies keep these modules under ``utils/`` while others keep them at the
+# project root. Support both.
+try:
+    from utils.HMD_helper import HMD_yaw  # type: ignore
+except Exception:  # pragma: no cover
+    from utils.HMD_helper import HMD_yaw  # type: ignore
+
+try:
+    from utils.tools import Tools  # type: ignore
+except Exception:  # pragma: no cover
+    from utils.tools import Tools  # type: ignore
 from tqdm import tqdm
 from datetime import datetime
 import ast
+from typing import Optional
+
 import math
+
+# ---------------------------------------------------------------------------
+# Config helpers (support both legacy single-dataset keys and new shuffled/unshuffled keys)
+# ---------------------------------------------------------------------------
+
+def _safe_get_config(key: str, default=None):
+    """Return common.get_configs(key) if available, else default."""
+    try:
+        val = common.get_configs(key)
+    except Exception:
+        return default
+    return default if val is None else val
+
+
+def _resolve_data_folder(dataset: Optional[str] = None) -> str:
+    """Resolve participant_response folder from configs.
+
+    Supports:
+    - legacy:  data
+    - new:     shuffled_data / unshuffled_data (when dataset is provided)
+    - fallback: shuffled_data then unshuffled_data
+    """
+    if dataset:
+        v = _safe_get_config(f"{dataset}_data", None)
+        if v:
+            return v
+    v = _safe_get_config("data", None)
+    if v:
+        return v
+    v = _safe_get_config("shuffled_data", None)
+    if v:
+        return v
+    v = _safe_get_config("unshuffled_data", None)
+    if v:
+        return v
+    # Last resort: keep old behavior but make it explicit.
+    return ""
+
 
 
 logger = CustomLogger(__name__)  # use custom logger
@@ -37,13 +87,16 @@ font_family = common.get_configs("font_family")
 
 class HMD_helper:
 
-    def __init__(self):
+    def __init__(self, *, dataset: Optional[str] = None, data_folder: Optional[str] = None,
+                 output_folder: Optional[str] = None):
         self.template = common.get_configs('plotly_template')
         self.smoothen_signal = common.get_configs('smoothen_signal')
         self.folder_figures = common.get_configs('figures')  # subdirectory to save figures
         self.folder_stats = 'statistics'  # subdirectory to save statistical output
-        self.data_folder = common.get_configs("data")  # Get path to participant data
-        self.output_folder = common.get_configs("output")
+        self.data_folder = data_folder or _resolve_data_folder(dataset)  # participant data folder
+        if not self.data_folder:
+            logger.warning("No data folder configured (expected config key 'data' or 'shuffled_data'/'unshuffled_data').")  # noqa: E501
+        self.output_folder = output_folder or common.get_configs("output")
 
     def smoothen_filter(self, signal, type_flter='OneEuroFilter'):
         """Smoothen list with a filter.
@@ -206,11 +259,8 @@ class HMD_helper:
             " Chinese": "China",
             "Polish": "Poland",
             "Indian ": "India",
-            "Indian": "India",
-            "indian": "India",
             "Dutch ": "Netherlands",
             "Dutch": "Netherlands",
-            "Nederlandse": "Netherlands",
             "Iranian": "Iran",
             "Romanian": "Romania",
             "Spanish": "Spain",
@@ -218,17 +268,8 @@ class HMD_helper:
             "portuguese": "Portugal",
             "Taiwanese": "Taiwan",
             "German": "Germany",
-            "dutch": "Netherlands",
-            "Austrian": "Austria",
-            "Brazilian ": "Brazil",
-            "Bulgarian": "Bulgaria",
-            "bulgarian": "Bulgaria",
-            "Italian": "Italy",
-            "Indonesian": "Indonesia",
-            "Dutch/Moroccan": "Morocco",
-            "Maltese": "Malta",
-            "Canadian": "Canada",
-            "Portuguese": "Portugal"
+            "Indian": "India",
+            "dutch": "Netherlands"
         }
 
         # Apply mapping
@@ -324,7 +365,7 @@ class HMD_helper:
 
             # Add average row at the end (ignoring participant_id)
             avg_values = df.iloc[:, 1:].mean(skipna=True)
-            avg_row = pd.DataFrame([["average"] + avg_values.tolist()], columns=df.columns)  # type: ignore
+            avg_row = pd.DataFrame([["average"] + avg_values.tolist()], columns=df.columns)
             df = pd.concat([df, avg_row], ignore_index=True)
 
             # Save the aggregated slider data to CSV
@@ -1498,7 +1539,7 @@ class HMD_helper:
         # Force numerics for times; invalids -> NaN
         md["cross_p1_time_s"] = pd.to_numeric(md["cross_p1_time_s"], errors="coerce")
         md["cross_p2_time_s"] = pd.to_numeric(md["cross_p2_time_s"], errors="coerce")
-        md["camera"] = pd.to_numeric(md["camera"], errors="coerce").astype("Int64")  # type: ignore
+        md["camera"] = pd.to_numeric(md["camera"], errors="coerce").astype("Int64")
 
         # Build lookup: video_id -> {label, camera, p1, p2}
         mapping_info = {
@@ -1563,9 +1604,9 @@ class HMD_helper:
             else:
                 # Coerce Timestamp to numeric seconds, drop rows with invalid timestamps
                 ts = pd.to_numeric(df["Timestamp"], errors="coerce")
-                valid = ts.notna()  # type: ignore
+                valid = ts.notna()
                 df = df.loc[valid].copy()
-                ts = ts.loc[valid]  # type: ignore
+                ts = ts.loc[valid]
 
                 if cutoff is not None and np.isfinite(cutoff):
                     mask = ts <= float(cutoff)
@@ -1798,7 +1839,7 @@ class HMD_helper:
         all_records = []
 
         # --- Read all participant response CSVs (no headers) --- #
-        for pid in range(101, n_participants + 101):
+        for pid in range(1, n_participants + 1):
             participant_folder = os.path.join(responses_root, f"Participant_{pid}")
             if not os.path.isdir(participant_folder):
                 logger.warning(f"Participant folder not found: {participant_folder}")
@@ -2440,9 +2481,12 @@ class HMD_helper:
         long_cond = long_cond.dropna(subset=["rating", "yielding", "eHMIOn", "camera"])
 
         # 4. Unique condition combinations (should be 8)
-        conds = (long_cond[["yielding", "eHMIOn", "camera"]]
-                 .drop_duplicates().sort_values(["yielding", "eHMIOn", "camera"])  # type: ignore
-                 .reset_index(drop=True))
+        conds = (
+            long_cond[["yielding", "eHMIOn", "camera"]]
+            .drop_duplicates()
+            .sort_values(["yielding", "eHMIOn", "camera"])
+            .reset_index(drop=True)
+        )
 
         max_plots = 8
         if len(conds) > max_plots:
@@ -2625,7 +2669,7 @@ class HMD_helper:
         all_labels = []       # Corresponding list of human-friendly trial labels
         ttest_signals = []    # Store t-test pairs for stats annotations
 
-        data_folder = common.get_configs("data")  # Get path to raw data
+        data_folder = self.data_folder  # Get path to raw data
 
         # === Reference (test) trial: export yaw matrix and compute average yaw per timestamp ===
         test_participant_csv = os.path.join(
@@ -2721,6 +2765,14 @@ class HMD_helper:
         for df, label in zip(all_dfs, all_labels):
             combined_df[label] = df["AvgYaw"]
 
+        # For interpretability (and consistency with the paper), plot yaw in degrees.
+        # The underlying saved CSVs remain in radians.
+        for label in all_labels:
+            try:
+                combined_df[label] = np.degrees(pd.to_numeric(combined_df[label], errors="coerce"))
+            except Exception:
+                pass
+
         # === Helper for event times (ignore ±0.02 s by rounding + mode) ===
         def _get_mode_time(df, col, round_decimals=2):
             """Return the mode of a time column, ignoring NaNs and
@@ -2806,7 +2858,8 @@ class HMD_helper:
             xaxis_range=xaxis_range,
             yaxis_range=yaxis_range,
             xaxis_title=xaxis_title,  # type: ignore
-            yaxis_title="Yaw angle, [radians]",
+            # plot in degrees (the combined_df was converted above)
+            yaxis_title="Yaw angle, [deg]",
             xaxis_title_offset=-0.047,  # type: ignore
             name_file=f"{name}",
             show_text_labels=True,
@@ -2821,7 +2874,7 @@ class HMD_helper:
             ttest_annotation_x=0.001,  # type: ignore
             ttest_marker_size=common.get_configs("font_size") - 6,
             xaxis_step=1,
-            yaxis_step=0.03,  # type: ignore
+            yaxis_step=2,  # ~2° ticks
             legend_x=0,
             legend_y=1.225,
             legend_columns=2,
@@ -3033,6 +3086,31 @@ class HMD_helper:
         if not metrics_cam1_df.empty:
             logger.info(f"Camera 1 metrics:\n{metrics_cam1_df.to_string(index=False)}")
 
+        # Persist metrics tables for reporting/reproducibility
+        try:
+            if not metrics_cam0_df.empty:
+                metrics_cam0_df.to_csv(
+                    os.path.join(yaw_files_dir, "yaw_freq_metrics_camera0.csv"),
+                    index=False,
+                )
+            if not metrics_cam1_df.empty:
+                metrics_cam1_df.to_csv(
+                    os.path.join(yaw_files_dir, "yaw_freq_metrics_camera1.csv"),
+                    index=False,
+                )
+            # also write a human-readable log
+            with open(os.path.join(yaw_files_dir, "yaw_freq_metrics_camera_level.txt"), "w") as f:
+                if not metrics_cam0_df.empty:
+                    f.write("Camera 0 metrics\n")
+                    f.write(metrics_cam0_df.to_string(index=False))
+                    f.write("\n\n")
+                if not metrics_cam1_df.empty:
+                    f.write("Camera 1 metrics\n")
+                    f.write(metrics_cam1_df.to_string(index=False))
+                    f.write("\n")
+        except Exception as e:
+            logger.warning(f"Could not write yaw frequency metrics tables: {e}")
+
         def finalize_figure(fig, cam_value):
             if fig is None:
 
@@ -3202,6 +3280,19 @@ class HMD_helper:
         metrics_grid_df = pd.DataFrame(metrics_grid)
         if not metrics_grid_df.empty:
             logger.info(f"Grid (camera × distPed) metrics:\n{metrics_grid_df.to_string(index=False)}")
+
+        # Persist grid metrics
+        try:
+            if not metrics_grid_df.empty:
+                metrics_grid_df.to_csv(
+                    os.path.join(yaw_files_dir, "yaw_freq_metrics_camera_by_distPed.csv"),
+                    index=False,
+                )
+                with open(os.path.join(yaw_files_dir, "yaw_freq_metrics_camera_by_distPed.txt"), "w") as f:
+                    f.write(metrics_grid_df.to_string(index=False))
+                    f.write("\n")
+        except Exception as e:
+            logger.warning(f"Could not write yaw grid metrics tables: {e}")
 
         # Common layout for the grid figure
         fig_grid.update_layout(

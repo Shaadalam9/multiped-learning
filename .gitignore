@@ -1,3 +1,8 @@
+# Video and data folders
+data/
+_output
+_compare_output
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -193,6 +198,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+.DS_Store
 
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
@@ -205,3 +211,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# log files
+*.log
+*.out
+logs.txt
+
+# Instance specific files
+config
+secret

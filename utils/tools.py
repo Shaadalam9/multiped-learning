@@ -1,7 +1,20 @@
 import numpy as np
 import pandas as pd
 import ast
-from utils.HMD_helper import HMD_yaw
+
+"""Utility helpers used across the Multiped-learning analysis code.
+
+This project is sometimes run with different repository layouts:
+some copies keep :mod:`HMD_helper` under ``utils/`` while others keep it at the
+project root. The import block below supports both layouts.
+"""
+
+try:
+    # Preferred layout
+    from utils.HMD_helper import HMD_yaw  # type: ignore
+except Exception:  # pragma: no cover
+    # Fallback for flat layout
+    from HMD_helper import HMD_yaw  # type: ignore
 
 HMD_class = HMD_yaw()
 
