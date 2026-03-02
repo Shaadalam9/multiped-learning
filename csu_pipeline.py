@@ -308,22 +308,6 @@ def _factor_drift_curve(df: pd.DataFrame, factor_col: str) -> pd.DataFrame:
     return grp
 
 
-def _trial_num_display(x: pd.Series) -> pd.Series:
-    """Convert 0-based trial_index to 1-based trial number for plotting.
-
-    Many internal computations use 0-based indexing (0..39). For papers, we display
-    trials as 1..40.
-    """
-    xs = pd.to_numeric(x, errors="coerce")
-    try:
-        mn = float(np.nanmin(xs.to_numpy(dtype=float)))
-    except Exception:
-        return xs
-    if np.isfinite(mn) and mn == 0.0:
-        return xs + 1
-    return xs
-
-
 def _plot_factor_drift_by_trial_index(
     df: pd.DataFrame,
     factor_col: str,
@@ -3038,60 +3022,3 @@ class ComparisonPipeline:
         MAPPING_CSV = self.mapping_csv
         OUTPUT_ROOT = self.output_root
         main()
-
-
-# ---------------------------------------------------------------------------
-# Analysis modules (namespaces)
-# ---------------------------------------------------------------------------
-
-class QuestionnaireAnalysis:
-    """Questionnaire extraction + demographics helpers."""
-
-    extract_selected_questionnaire_values = staticmethod(extract_selected_questionnaire_values)
-    extract_questionnaire_selected_values = staticmethod(_extract_questionnaire_selected_values)
-    summarize_demographics_from_intake = staticmethod(_summarize_demographics_from_intake)
-
-    # Normalizers (useful for downstream analyses / reports)
-    normalize_nationality = staticmethod(_normalize_nationality)
-    bucket_vr_experience = staticmethod(_bucket_vr_experience)
-    parse_seeing_aids = staticmethod(_parse_seeing_aids)
-    load_questionnaire_csv = staticmethod(_load_questionnaire_csv)
-
-
-class ReliabilityAnalysis:
-    """Within-participant reliability computations + plots."""
-
-    within_participant_reliability = staticmethod(_within_participant_reliability)
-    plot_reliability_scatter = staticmethod(_plot_reliability_scatter)
-    split_half_means = staticmethod(_split_half_means)
-
-
-class LearningAnalysis:
-    """Learning / drift analyses over trial index."""
-
-    factor_drift_curve = staticmethod(_factor_drift_curve)
-    plot_factor_drift_by_trial_index = staticmethod(_plot_factor_drift_by_trial_index)
-    participant_learning_metrics = staticmethod(_participant_learning_metrics)
-    participant_sequential_metrics = staticmethod(_participant_sequential_metrics)
-    participant_break_matched_metrics = staticmethod(_participant_break_matched_metrics)
-    infer_break_end_positions = staticmethod(_infer_break_end_positions)
-    make_trial_pos = staticmethod(_make_trial_pos)
-    build_cond_key = staticmethod(_build_cond_key)
-    binned_curves = staticmethod(_binned_curves)
-    trial_num_display = staticmethod(_trial_num_display)
-
-
-class MissingnessAnalysis:
-    """Latency missingness mechanism analysis (GEE logistic regressions)."""
-
-    gee_binomial = staticmethod(_gee_binomial)
-    summarize_gee = staticmethod(_summarize_gee)
-    latency_missingness_analysis = staticmethod(_latency_missingness_analysis)
-
-
-class ReportingUtils:
-    """Printing/reporting helpers."""
-
-    print_dataset_overview = staticmethod(_print_dataset_overview)
-    print_metric_descriptives = staticmethod(_print_metric_descriptives)
-    print_top_results = staticmethod(_print_top_results)

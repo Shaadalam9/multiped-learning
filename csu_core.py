@@ -636,23 +636,73 @@ def _resolve_plot_dirs(h: HMD_helper, out_root: Optional[str] = None) -> List[st
     return [d for d in out_dirs if d and not (d in seen or seen.add(d))]
 
 
-def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, record_index: bool = True) -> None:
+
+
+def _save_plot(
+    h: HMD_helper,
+    fig,
+    name: str,
+    out_root: Optional[str] = None,
+    record_index: bool = True,
+    open_browser: bool = True,
+) -> None:
     """
-    Save a Plotly figure to:
-      - HTML (always, if possible)
-      - PNG + EPS (best-effort; requires Kaleido)
+    Save a Plotly figure.
 
-    Writes to *all* relevant folders:
-      1) common.get_configs('output')  (e.g., _output)
-      2) out_root                     (e.g., _compare_output)
-      3) h.folder_figures             (e.g., figures)
+    Preferred behaviour (when available): use `HMD_helper.save_plotly(...)` so figures can pop up
+    one by one (interactive Plotly view).
 
-    Also records plots (in primary output dir) for an index page that we auto-open at the end.
+    Fallback behaviour: write HTML via `fig.write_html(...)` and export PNG and EPS (best effort;
+    requires Kaleido).
+
+    Notes
+    - Set environment variable `CSU_OPEN_BROWSER=1` to force opening each plot in your browser.
+    - The function still writes plots to the relevant output folders.
     """
     global _KALEIDO_WARNED
     if fig is None:
         return
 
+    # env var override (handy when you do not want to touch call sites)
+    env_open = os.environ.get('CSU_OPEN_BROWSER', None)
+    if env_open is not None and str(env_open).strip() != '':
+        open_browser = str(env_open).strip().lower() in {'1', 'true', 'yes', 'y'}
+
+    # If we have the project's helper, prefer it. It handles Kaleido MathJax quirks and browser opening.
+    try:
+        if hasattr(h, "save_plotly"):
+            # HMD_helper.save_plotly saves to `common.get_configs("output")` (and optionally to h.folder_figures).
+            # Only use it when that matches the requested out_root, otherwise we fall back to multi dir saving.
+            out_dirs = _resolve_plot_dirs(h, out_root=out_root)
+            common_out = out_dirs[0] if out_dirs else None
+
+            def _same_dir(a: Optional[str], b: Optional[str]) -> bool:
+                if not a or not b:
+                    return False
+                try:
+                    return os.path.abspath(str(a)) == os.path.abspath(str(b))
+                except Exception:
+                    return False
+
+            if (out_root is None) or _same_dir(out_root, common_out):
+                h.save_plotly(
+                    fig,
+                    name=name,
+                    remove_margins=False,
+                    width=1320,
+                    height=680,
+                    save_eps=True,
+                    save_png=True,
+                    save_html=True,
+                    open_browser=bool(open_browser),
+                    save_mp4=False,
+                    save_final=True,
+                )
+                return
+    except Exception as e:
+        print(f"[plot] NOTE: HMD_helper.save_plotly failed for {name}: {e}. Falling back to fig.write_html.")
+
+    # ---- Fallback multi directory saving ----
     out_dirs = _resolve_plot_dirs(h, out_root=out_root)
     if not out_dirs:
         print(f"[plot] SKIP {name}: no output directories resolved")
@@ -667,7 +717,7 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
         except Exception:
             continue
 
-        # --- HTML ---
+        # HTML
         html_path = os.path.join(d, f"{name}.html")
         try:
             fig.write_html(html_path, include_plotlyjs="cdn", full_html=True, auto_open=False)
@@ -677,7 +727,6 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
         except Exception as e:
             print(f"[plot] FAILED html {html_path}: {e}")
 
-        # --- Raster/Vector exports (optional: Kaleido) ---
         # Make Kaleido more robust (MathJax is a frequent culprit).
         try:
             import plotly.io as pio  # local import
@@ -694,20 +743,26 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
         except Exception as e:
             if not _KALEIDO_WARNED:
                 _KALEIDO_WARNED = True
-                print(f"[plot] NOTE: PNG/EPS export needs Kaleido. If missing, run: pip install -U kaleido. (first error: {e})")  # noqa: E501
+                print(f"[plot] NOTE: PNG and EPS export needs Kaleido. If missing, run: pip install -U kaleido. (first error: {e})")
 
         # EPS
         try:
             fig.write_image(os.path.join(d, f"{name}.eps"), width=1320, height=680)
         except Exception:
-            # already warned above (once)
+            pass
+
+    # Open the primary HTML for this figure if requested
+    if wrote_html and open_browser:
+        try:
+            import webbrowser
+            webbrowser.open("file://" + os.path.abspath(wrote_html[0]))
+        except Exception:
             pass
 
     if wrote_html:
         print(f"[plot] wrote: {name} -> " + ", ".join(wrote_html))
     else:
         print(f"[plot] FAILED to write any HTML for {name}")
-
 
 def _write_plot_index_and_open(h: HMD_helper) -> None:
     """Write a single HTML index linking all recorded plots, then auto-open it (one tab)."""
@@ -870,53 +925,6 @@ def _corr_with_p(x: pd.Series, y: pd.Series, min_n: int = 5) -> Tuple[float, flo
 def _ensure_dir(path: str) -> None:
     if path and not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-
-
-# ---------------------------------------------------------------------------
-# Class-based convenience wrappers
-# ---------------------------------------------------------------------------
-
-class StatsUtils:
-    """Namespace for robust statistical helpers (static methods)."""
-
-    safe_corr = staticmethod(_safe_corr)
-    is_near_constant = staticmethod(_is_near_constant)
-    safe_two_sample_test = staticmethod(_safe_two_sample_test)
-    zscore = staticmethod(_zscore)
-    fisher_z = staticmethod(_fisher_z)
-    xcorr_max_r_lag = staticmethod(_xcorr_max_r_lag)
-    bh_fdr = staticmethod(_bh_fdr)
-    cohens_d = staticmethod(_cohens_d)
-    fisher_ci = staticmethod(_fisher_ci)
-    compare_independent_corr = staticmethod(_compare_independent_corr)
-    roc_curve_and_auc = staticmethod(_roc_curve_and_auc)
-    corr_with_p = staticmethod(_corr_with_p)
-
-
-class CSVUtils:
-    """CSV probing/selection helpers used during dataset traversal."""
-
-    read_csv_flexible = staticmethod(_read_csv_flexible)
-    read_csv_loose = staticmethod(_read_csv_loose)
-    probe_csv_columns = staticmethod(_probe_csv_columns)
-    score_trial_file = staticmethod(_score_trial_file)
-    choose_trial_file = staticmethod(_choose_trial_file)
-
-
-class PlotManager:
-    """Plot saving helpers (Plotly HTML + optional PNG/EPS) and an index page."""
-
-    get_output_dir_for_logs = staticmethod(_get_output_dir_for_logs)
-    resolve_plot_dirs = staticmethod(_resolve_plot_dirs)
-    save_plot = staticmethod(_save_plot)
-    write_plot_index_and_open = staticmethod(_write_plot_index_and_open)
-
-
-class Comparator:
-    """Comparison helpers for shuffled vs unshuffled outputs."""
-
-    compare_shuffled_unshuffled = staticmethod(compare_shuffled_unshuffled)
-    compare_participant_metrics = staticmethod(compare_participant_metrics)
 
 
 # ---------------------------------------------------------------------------

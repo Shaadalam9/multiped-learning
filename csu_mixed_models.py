@@ -769,8 +769,10 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
     except Exception as e:
         print(f"[C] Between-subject balance/sensitivity block failed (non-fatal): {e}")
 
-    # Auto-open a single index page linking all plots (instead of opening hundreds of tabs)
-    _write_plot_index_and_open(h)
+    # Optional: open a single index page linking all plots
+    # Set CSU_OPEN_PLOT_INDEX=1 if you want this behaviour
+    if str(os.environ.get('CSU_OPEN_PLOT_INDEX', '')).strip().lower() in {'1', 'true', 'yes', 'y'}:
+        _write_plot_index_and_open(h)
 
 
 # ---------------------------------------------------------------------------
@@ -790,32 +792,3 @@ class MixedModelsPipeline:
         global OUTPUT_ROOT
         OUTPUT_ROOT = self.output_root
         run_mixed_models_analysis(trial_df=trial_df)
-
-
-# ---------------------------------------------------------------------------
-# Namespaced helpers (classes)
-# ---------------------------------------------------------------------------
-
-class MixedModelHelpers:
-    """Low-level helpers used by the mixed-models pipeline."""
-
-    bh_fdr = staticmethod(_mm_bh_fdr)
-    logit = staticmethod(_mm_logit)
-    fit_mixedlm = staticmethod(_mm_fit_mixedlm)
-    extract_fixed_effects = staticmethod(_mm_extract_fixed_effects)
-    tost_equivalence = staticmethod(_mm_tost_equivalence)
-    forest_plot = staticmethod(_mm_forest_plot)
-    means_plot = staticmethod(_mm_means_plot)
-    make_full_formula = staticmethod(_mm_make_full_formula)
-    make_stable_formula = staticmethod(_mm_make_stable_formula)
-    prepare_df = staticmethod(_mm_prepare_df)
-
-
-class MixedModelsAnalysis:
-    """Alternative OO entrypoint (alias around MixedModelsPipeline)."""
-
-    def __init__(self, output_root: str = "_compare_output") -> None:
-        self.output_root = output_root
-
-    def run(self, trial_df: Optional[pd.DataFrame] = None) -> None:
-        MixedModelsPipeline(output_root=self.output_root).run(trial_df=trial_df)

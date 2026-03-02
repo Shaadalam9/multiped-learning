@@ -3343,38 +3343,6 @@ class HMD_helper:
         fig_grid.update_yaxes(title_text="Frequency", row=2, col=1)
         fig_grid.update_xaxes(title_text="Gaze yaw angle (deg)", row=2, col=3)
 
-        # Row labels on extreme left: "Can see the person" / "Cannot see the person"
-        # Use y-axis domains of first column in each row to place the labels nicely
-        # try:
-        #     dom_row1 = fig_grid.layout.yaxis.domain
-        #     dom_row2 = fig_grid.layout.yaxis6.domain  # first yaxis in second row
-        #     y_row1 = 0.5 * (dom_row1[0] + dom_row1[1])
-        #     y_row2 = 0.5 * (dom_row2[0] + dom_row2[1])
-        # except Exception:
-        #     # Fallback approximate positions if domains aren't available
-        #     y_row1, y_row2 = 0.75, 0.25
-
-        # fig_grid.add_annotation(
-        #     xref="paper",
-        #     yref="paper",
-        #     x=-0.04,
-        #     y=y_row1,
-        #     text="Can see the person",
-        #     showarrow=False,
-        #     textangle=-90,
-        #     font=dict(family="Arial", size=14),
-        # )
-        # fig_grid.add_annotation(
-        #     xref="paper",
-        #     yref="paper",
-        #     x=-0.04,
-        #     y=y_row2,
-        #     text="Cannot see the person",
-        #     showarrow=False,
-        #     textangle=-90,
-        #     font=dict(family="Arial", size=14),
-        # )
-
         # Save grid figure
         self.save_plotly(
             fig_grid,

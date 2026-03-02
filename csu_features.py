@@ -1550,23 +1550,6 @@ def compute_trigger_features_dataset(
 
 
 # ---------------------------------------------------------------------------
-# Class-based convenience wrappers
-# ---------------------------------------------------------------------------
-
-
-class FeatureExtractors:
-    """Namespace for per-trial feature extractors (static methods)."""
-
-    load_trial_q123_from_responses = staticmethod(load_trial_q123_from_responses)
-    compute_participant_q_behavior_metrics = staticmethod(compute_participant_q_behavior_metrics)
-
-    compute_trigger_features_dataset = staticmethod(compute_trigger_features_dataset)
-
-    compute_yaw_features_dataset = staticmethod(compute_yaw_features_dataset)
-    summarize_and_plot_yaw_results = staticmethod(summarize_and_plot_yaw_results)
-
-
-# ---------------------------------------------------------------------------
 # Star-import compatibility
 # ---------------------------------------------------------------------------
 # This module also keeps several underscore-prefixed helper functions to avoid

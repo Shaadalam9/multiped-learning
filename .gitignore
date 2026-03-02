@@ -218,5 +218,4 @@ __marimo__/
 logs.txt
 
 # Instance specific files
-config
-secret
+/config
