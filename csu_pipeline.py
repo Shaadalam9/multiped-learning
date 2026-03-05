@@ -24,6 +24,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, linregress
 
+from custom_logger import CustomLogger
+
 # Import helpers + features (kept as names to avoid editing the original function bodies)
 from csu_core import (  # noqa: F401
     HAVE_SM,
@@ -74,6 +76,7 @@ from helper import HMD_helper
 DATASETS: Dict[str, Dict[str, str]] = {}
 MAPPING_CSV: str = "mapping.csv"
 OUTPUT_ROOT: str = "_compare_output"
+logger = CustomLogger(__name__)  # use custom logger
 
 
 INTAKE_COLUMNS_CATEGORICAL = [
@@ -138,7 +141,7 @@ PLOT_METRICS = [
     "head_turn_dwell_mean_s_15",
     "yaw_speed_pre_press_mean_1s",
     "lag_turn_to_press_s_15",
-        "yaw_pre_press_delta_1s",
+    "yaw_pre_press_delta_1s",
     "yaw_pre_press_delta_1s",
     "yaw_speed_pre_press_mean_2s",
     "yaw_pre_press_mean_2s",
@@ -203,12 +206,12 @@ POST_NUMERIC_COLUMNS_TO_EXTRACT = [
 def _print_dataset_overview(all_features: pd.DataFrame) -> None:
     if all_features.empty:
         return
-    print("\n=== Dataset overview ===")
+    logger.info("\n=== Dataset overview ===")
     if "participant_id" in all_features.columns:
         pcount = all_features.groupby("dataset")["participant_id"].nunique().to_dict()
-        print("Unique participants:", pcount)
+        logger.info("Unique participants:", pcount)
     tcount = all_features.groupby("dataset").size().to_dict()
-    print("Participant×trial rows:", tcount)
+    logger.info("Participant×trial rows:", tcount)
 
     miss_metrics = [m for m in PLOT_METRICS if m in all_features.columns]
     if miss_metrics:
@@ -217,12 +220,12 @@ def _print_dataset_overview(all_features: pd.DataFrame) -> None:
             .apply(lambda g: g.isna().mean())
             .round(3)
         )
-        print("\nMissingness (fraction NaN) for plotted metrics:")
-        print(miss.to_string())
+        logger.info("\nMissingness (fraction NaN) for plotted metrics:")
+        logger.info(miss.to_string())
 
 
 def _print_metric_descriptives(all_features: pd.DataFrame, metrics: List[str]) -> None:
-    print("\n=== Descriptive stats by dataset (non-NaN rows) ===")
+    logger.info("\n=== Descriptive stats by dataset (non-NaN rows) ===")
     rows = []
     for metric in metrics:
         if metric not in all_features.columns:
@@ -247,23 +250,23 @@ def _print_metric_descriptives(all_features: pd.DataFrame, metrics: List[str]) -
                 }
             )
     if not rows:
-        print("(no metrics found)")
+        logger.info("(no metrics found)")
         return
     df = pd.DataFrame(rows)
     with pd.option_context("display.max_rows", 200, "display.max_columns", 50):
-        print(df.sort_values(["metric", "dataset"]).round(4).to_string(index=False))
+        logger.info(df.sort_values(["metric", "dataset"]).round(4).to_string(index=False))
 
 
 def _print_top_results(res: pd.DataFrame, title: str, top_k: int = 15) -> None:
     if res is None or res.empty:
-        print(f"\n=== {title} ===\n(no rows)")
+        logger.info(f"\n=== {title} ===\n(no rows)")
         return
 
     metric_col = _pick_col(res, ["metric", "variable", "var", "measure"])
     p_col = _pick_col(res, ["p_fdr", "q_value", "p_adj", "p_adjusted", "p_value", "p"])
     d_col = _pick_col(res, ["cohen_d", "effect_size_d", "d"])
 
-    print(f"\n=== {title} ===")
+    logger.info(f"\n=== {title} ===")
     cols_to_show = [c for c in [metric_col, d_col, p_col] if c]
     for c in ["t_stat", "t", "df", "n_shuffled", "n_unshuffled", "mean_shuffled", "mean_unshuffled"]:
         if c in res.columns and c not in cols_to_show:
@@ -277,7 +280,7 @@ def _print_top_results(res: pd.DataFrame, title: str, top_k: int = 15) -> None:
         out = res.head(top_k)
 
     with pd.option_context("display.max_rows", 200, "display.max_columns", 100):
-        print(out[cols_to_show].to_string(index=False))
+        logger.info(out[cols_to_show].to_string(index=False))
 
 
 def _factor_drift_curve(df: pd.DataFrame, factor_col: str) -> pd.DataFrame:
@@ -308,13 +311,7 @@ def _factor_drift_curve(df: pd.DataFrame, factor_col: str) -> pd.DataFrame:
     return grp
 
 
-def _plot_factor_drift_by_trial_index(
-    df: pd.DataFrame,
-    factor_col: str,
-    title: str,
-    name: str,
-    h: HMD_helper,
-) -> None:
+def _plot_factor_drift_by_trial_index(df: pd.DataFrame, factor_col: str, title: str, name: str, h: HMD_helper) -> None:
     """Plot factor composition drift over trial_index (Randomised vs Fixed-order).
 
     Style is tuned for paper figures:
@@ -323,19 +320,19 @@ def _plot_factor_drift_by_trial_index(
     - 95% CI band shown for Randomised (shuffled) only
     """
     if go is None:
-        print("[plot] plotly.graph_objects not available; skipping factor drift plots.")
+        logger.warning("[plot] plotly.graph_objects not available; skipping factor drift plots.")
         return
 
     curve = _factor_drift_curve(df, factor_col=factor_col)
     if curve is None or curve.empty:
-        print(f"[plot] factor drift: no data for {factor_col}; skipping.")
+        logger.info(f"[plot] factor drift: no data for {factor_col}; skipping.")
         return
 
     # Display names + colors (match typical paper styling)
     label_map = {"shuffled": "Randomised", "unshuffled": "Fixed-order"}
     color_map = {
-        "shuffled": "#1f77b4",   # blue
-        "unshuffled": "#ff7f0e", # orange
+        "shuffled": "#1f77b4",    # blue
+        "unshuffled": "#ff7f0e",  # orange
     }
     band_color = "rgba(31,119,180,0.18)"  # light blue
 
@@ -639,10 +636,7 @@ def _infer_break_end_positions(n_trials: int) -> List[int]:
     return ends
 
 
-def _participant_learning_metrics(
-    df: pd.DataFrame,
-    outcomes: List[str],
-) -> pd.DataFrame:
+def _participant_learning_metrics(df: pd.DataFrame, outcomes: List[str]) -> pd.DataFrame:
     """Compute time-on-task slope + early/late drift + break reset per participant."""
     rows = []
     if df.empty:
@@ -664,7 +658,7 @@ def _participant_learning_metrics(
             slope = lr["slope"]
 
             # early/late drift (last third - first third)
-            n = int(np.isfinite(y).sum())
+            n = int(np.isfinite(y).sum())  # noqa:F841
             drift = np.nan
             if n_trials >= 6:
                 k = max(2, n_trials // 3)
@@ -1068,7 +1062,7 @@ def _load_questionnaire_csv(path: str, prefix: str) -> Optional[pd.DataFrame]:
         try:
             df = pd.read_csv(path, sep=";")
         except Exception as e:
-            print(f"[F] Could not read questionnaire CSV {path}: {e}")
+            logger.error(f"[F] Could not read questionnaire CSV {path}: {e}")
             return None
 
     if df.shape[0] == 0:
@@ -1312,22 +1306,17 @@ def _extract_questionnaire_selected_values(
     return long_df, cat_dist, num_sum
 
 
-def _summarize_demographics_from_intake(
-    dataset: str,
-    intake_path: str,
-    features_df: Optional[pd.DataFrame],
-    mapping_df: Optional[pd.DataFrame],
-    out_dir: str,
-) -> None:
+def _summarize_demographics_from_intake(dataset: str, intake_path: str, features_df: Optional[pd.DataFrame],
+                                        mapping_df: Optional[pd.DataFrame], out_dir: str) -> None:
     """Print and save sample/demographics summary (if the fields exist)."""
     intake = _read_csv_loose(intake_path)
     if intake is None or intake.shape[0] == 0:
-        print(f"[DEM] {dataset}: intake questionnaire not found or empty -> {intake_path}")
+        logger.warning(f"[DEM] {dataset}: intake questionnaire not found or empty -> {intake_path}")
         return
 
     id_col = _infer_id_col(intake)
     if id_col is None:
-        print(f"[DEM] {dataset}: could not infer participant id column in intake.")
+        logger.warning(f"[DEM] {dataset}: could not infer participant id column in intake.")
         return
 
     df = intake.copy()
@@ -1350,11 +1339,14 @@ def _summarize_demographics_from_intake(
         g = g.replace({"nan": np.nan, "": np.nan})
         gender_counts = g.value_counts(dropna=False).reset_index()
         gender_counts.columns = ["gender_raw", "count"]
-        mask_nd = g.isna() | g.str.lower().isin(["prefer not to say", "prefer not to disclose", "not disclosed", "dont want to say", "don't want to say"])
+        mask_nd = g.isna() | g.str.lower().isin(["prefer not to say", "prefer not to disclose",
+                                                 "not disclosed", "dont want to say", "don't want to say"])
         n_no_disclose = int(mask_nd.sum())
 
     # Age
-    age_mean = np.nan; age_sd = np.nan; n_age = 0
+    age_mean = np.nan
+    age_sd = np.nan
+    n_age = 0
     if col_age in df.columns:
         age = pd.to_numeric(df[col_age], errors="coerce").dropna()
         n_age = int(age.shape[0])
@@ -1413,53 +1405,53 @@ def _summarize_demographics_from_intake(
         completeness = per
 
     # Print (logs)
-    print(f"\n=== Sample summary (from intake + trial logs): {dataset} ===")
-    print(f"Participants (intake questionnaire rows): {n_intake}")
+    logger.info(f"\n=== Sample summary (from intake + trial logs): {dataset} ===")
+    logger.info(f"Participants (intake questionnaire rows): {n_intake}")
     if not np.isnan(n_feat_p):
-        print(f"Participants (with extracted trial logs): {int(n_feat_p)}")
-        print(f"Complete datasets (>= {int(expected_trials)} trials): {int(n_complete)}/{int(n_feat_p)}")
+        logger.info(f"Participants (with extracted trial logs): {int(n_feat_p)}")
+        logger.info(f"Complete datasets (>= {int(expected_trials)} trials): {int(n_complete)}/{int(n_feat_p)}")
 
     if gender_counts.shape[0] > 0:
         top_g = ", ".join([f"{r['gender_raw']}: {int(r['count'])}" for _, r in gender_counts.iterrows()])
-        print(f"Gender counts: {top_g}")
+        logger.info(f"Gender counts: {top_g}")
         if not np.isnan(n_no_disclose):
-            print(f"Gender not disclosed (heuristic): {int(n_no_disclose)}")
+            logger.info(f"Gender not disclosed (heuristic): {int(n_no_disclose)}")
     else:
-        print("Gender: (column not found)")
+        logger.error("Gender: (column not found)")
 
     if n_age > 0:
-        print(f"Age: mean={age_mean:.2f}, SD={age_sd:.2f} (n={n_age})")
+        logger.info(f"Age: mean={age_mean:.2f}, SD={age_sd:.2f} (n={n_age})")
     else:
-        print("Age: (column not found / no numeric values)")
+        logger.error("Age: (column not found / no numeric values)")
 
     if nat_counts.shape[0] > 0:
         top_nat = ", ".join([f"{r['nationality']}: {int(r['count'])}" for _, r in nat_counts.iterrows()])
-        print(f"Nationalities: {top_nat}")
+        logger.info(f"Nationalities: {top_nat}")
     else:
-        print("Nationality: (column not found)")
+        logger.error("Nationality: (column not found)")
 
     if aids_counts.shape[0] > 0:
         top_a = ", ".join([f"{r['seeing_aids_bucket']}: {int(r['count'])}" for _, r in aids_counts.iterrows()])
-        print(f"Seeing aids (bucketed): {top_a}")
+        logger.info(f"Seeing aids (bucketed): {top_a}")
     else:
-        print("Seeing aids: (column not found)")
+        logger.error("Seeing aids: (column not found)")
 
     if vr_counts_bucket.shape[0] > 0:
         top_v = ", ".join([f"{r['vr_bucket']}: {int(r['count'])}" for _, r in vr_counts_bucket.iterrows()])
-        print(f"VR experience (bucketed): {top_v}")
+        logger.info(f"VR experience (bucketed): {top_v}")
         if vr_other_detail is not None and vr_other_detail.shape[0] > 0:
-            print("VR experience -> Other (exact raw responses):")
+            logger.info("VR experience -> Other (exact raw responses):")
             for _, r in vr_other_detail.iterrows():
-                print(f"  {r['participant_key']}: {r['vr_experience_raw']}")
+                logger.info(f"  {r['participant_key']}: {r['vr_experience_raw']}")
         if vr_missing_detail is not None and vr_missing_detail.shape[0] > 0:
-            print("VR experience -> Missing (exact raw responses):")
+            logger.info("VR experience -> Missing (exact raw responses):")
             for _, r in vr_missing_detail.iterrows():
-                print(f"  {r['participant_key']}: {r['vr_experience_raw']}")
+                logger.info(f"  {r['participant_key']}: {r['vr_experience_raw']}")
     elif vr_counts_raw.shape[0] > 0:
         top_v = ", ".join([f"{r['vr_raw']}: {int(r['count'])}" for _, r in vr_counts_raw.iterrows()])
-        print(f"VR experience (raw): {top_v}")
+        logger.info(f"VR experience (raw): {top_v}")
     else:
-        print("VR experience: (column not found)")
+        logger.info("VR experience: (column not found)")
 
     # Save
     _ensure_dir(out_dir)
@@ -1531,7 +1523,8 @@ def extract_selected_questionnaire_values(
         for q in questions:
             c = _qcol(prefix, q)
             if c not in df.columns:
-                missing_rows.append({"dataset": ds, "questionnaire": qtype, "question": q, "reason": "column-not-found"})
+                missing_rows.append({"dataset": ds, "questionnaire": qtype, "question": q,
+                                     "reason": "column-not-found"})
                 continue
             tmp = pd.DataFrame({
                 "dataset": ds,
@@ -1573,7 +1566,7 @@ def extract_selected_questionnaire_values(
                                                                                                   "question", "value"])
     values_path = os.path.join(output_root, "questionnaire_selected_values_long.csv")
     values_long.to_csv(values_path, index=False)
-    print(f"[Q] wrote: {values_path} (rows={len(values_long)})")
+    logger.info(f"[Q] wrote: {values_path} (rows={len(values_long)})")
 
     # Categorical distribution (for intake_cols + post_cols only)
     if not values_long.empty:
@@ -1598,7 +1591,7 @@ def extract_selected_questionnaire_values(
         cat_dist["pct"] = (cat_dist["n"] / cat_dist["n_total"].replace(0, np.nan)).astype(float)
         cat_path = os.path.join(output_root, "questionnaire_categorical_distribution.csv")
         cat_dist.to_csv(cat_path, index=False)
-        print(f"[Q] wrote: {cat_path} (rows={len(cat_dist)})")
+        logger.info(f"[Q] wrote: {cat_path} (rows={len(cat_dist)})")
     else:
         cat_dist = pd.DataFrame(columns=["dataset", "questionnaire", "question", "value_label", "n", "n_total", "pct"])
 
@@ -1618,7 +1611,7 @@ def extract_selected_questionnaire_values(
         ).reset_index()
         num_path = os.path.join(output_root, "questionnaire_numeric_summary.csv")
         num_summary.to_csv(num_path, index=False)
-        print(f"[Q] wrote: {num_path} (rows={len(num_summary)})")
+        logger.info(f"[Q] wrote: {num_path} (rows={len(num_summary)})")
     else:
         num_summary = pd.DataFrame(columns=["dataset", "questionnaire", "question", "n", "mean",
                                             "sd", "median", "min", "max"])
@@ -1628,7 +1621,7 @@ def extract_selected_questionnaire_values(
         miss_df = pd.DataFrame(missing_rows)
         miss_path = os.path.join(output_root, "questionnaire_missing_questions_report.csv")
         miss_df.to_csv(miss_path, index=False)
-        print(f"[Q] wrote: {miss_path} (rows={len(miss_df)})")
+        logger.info(f"[Q] wrote: {miss_path} (rows={len(miss_df)})")
 
     return {"values_long": values_long, "cat_dist": cat_dist, "num_summary": num_summary}
 
@@ -1703,14 +1696,14 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
     a random-intercept logistic mixed model while remaining stable under factor drift.
     """
     if not HAVE_SM:
-        print("[Missingness] statsmodels not available; skipping missingness models.")
+        logger.warning("[Missingness] statsmodels not available; skipping missingness models.")
         return
 
     needed = ["dataset", "participant_id", "trial_index", "yielding", "eHMIOn", "camera", "distPed",
               "latency_first_press_s", "latency_first_release_s"]
     missing_cols = [c for c in needed if c not in trial_df.columns]
     if missing_cols:
-        print(f"[Missingness] missing required columns; skipping: {missing_cols}")
+        logger.warning(f"[Missingness] missing required columns; skipping: {missing_cols}")
         return
 
     d = trial_df.copy()
@@ -1747,9 +1740,9 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
     desc_path = os.path.join(out_root, "missingness_latency_descriptives.csv")
     desc.to_csv(desc_path, index=False)
 
-    print("\n=== Missingness: latency metrics ===")
-    print(desc.to_string(index=False))
-    print(f"[Missingness] wrote descriptives -> {desc_path}")
+    logger.info("\n=== Missingness: latency metrics ===")
+    logger.info(desc.to_string(index=False))
+    logger.info(f"[Missingness] wrote descriptives -> {desc_path}")
 
     # Models
     # 1) Simple: dataset + trial index
@@ -1771,25 +1764,25 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
         r = _gee_binomial(f_simple_press, d)
         rows.append(_summarize_gee(r, "miss_press", "GEE_simple"))
     except Exception as e:
-        print(f"[Missingness] press simple model failed: {e}")
+        logger.error(f"[Missingness] press simple model failed: {e}")
 
     try:
         r = _gee_binomial(f_adj_press, d)
         rows.append(_summarize_gee(r, "miss_press", "GEE_adjusted"))
     except Exception as e:
-        print(f"[Missingness] press adjusted model failed: {e}")
+        logger.error(f"[Missingness] press adjusted model failed: {e}")
 
     try:
         r = _gee_binomial(f_simple_release, d)
         rows.append(_summarize_gee(r, "miss_release", "GEE_simple"))
     except Exception as e:
-        print(f"[Missingness] release simple model failed: {e}")
+        logger.error(f"[Missingness] release simple model failed: {e}")
 
     try:
         r = _gee_binomial(f_adj_release, d)
         rows.append(_summarize_gee(r, "miss_release", "GEE_adjusted"))
     except Exception as e:
-        print(f"[Missingness] release adjusted model failed: {e}")
+        logger.error(f"[Missingness] release adjusted model failed: {e}")
 
     # Conditional release missing (given press)
     d_press = d[d["had_press"] == 1].copy()
@@ -1801,20 +1794,20 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
         r = _gee_binomial(f_adj_rel_cond, d_press)
         rows.append(_summarize_gee(r, "miss_release_given_press", "GEE_adjusted"))
     except Exception as e:
-        print(f"[Missingness] conditional release model failed: {e}")
+        logger.error(f"[Missingness] conditional release model failed: {e}")
 
     if rows:
         out = pd.concat(rows, ignore_index=True)
         out_path = os.path.join(out_root, "missingness_latency_models.csv")
         out.to_csv(out_path, index=False)
-        print(f"[Missingness] wrote models -> {out_path}")
+        logger.info(f"[Missingness] wrote models -> {out_path}")
 
         # quick highlight of dataset-related terms
         highlight = out[(out["model"] == "GEE_adjusted") & (out["term"].str.contains("dataset"))].copy()
         if not highlight.empty:
             highlight = highlight.sort_values(["outcome", "p"]).head(20)
-            print("\n[Missingness] adjusted model: top dataset-related terms (by p)")
-            print(highlight[["outcome", "term", "OR", "OR_lo", "OR_hi", "p"]].to_string(index=False))
+            logger.info("\n[Missingness] adjusted model: top dataset-related terms (by p)")
+            logger.info(highlight[["outcome", "term", "OR", "OR_lo", "OR_hi", "p"]].to_string(index=False))
 
     # Optional plot: missingness over trial number (1-based for display)
     try:
@@ -1848,7 +1841,7 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
             _plot_one("miss_release", "Missingness of first-release latency by trial number",
                       "missingness_release_over_trial")
     except Exception as e:
-        print(f"[Missingness] plotting failed: {e}")
+        logger.error(f"[Missingness] plotting failed: {e}")
 
 
 def main() -> None:
@@ -1859,7 +1852,7 @@ def main() -> None:
     try:
         extract_selected_questionnaire_values(DATASETS, OUTPUT_ROOT)
     except Exception as e:
-        print(f"[Q] extraction failed (non-fatal): {e}")
+        logger.error(f"[Q] extraction failed (non-fatal): {e}")
 
     mapping = pd.read_csv(MAPPING_CSV)
 
@@ -1886,19 +1879,19 @@ def main() -> None:
             thresholds=(0.10, 0.30, 0.50),
             analysis_window="crossing",
         )
-        print(f"{label}: extracted {len(df)} participant×trial rows -> {out_csv}")
+        logger.info(f"{label}: extracted {len(df)} participant×trial rows -> {out_csv}")
         features_by_dataset[label] = df
         if not df.empty:
             feature_dfs.append(df)
 
     if not feature_dfs:
-        print("No features extracted. Check your paths and filename matching.")
+        logger.warning("No features extracted. Check your paths and filename matching.")
         return
 
     all_features = pd.concat(feature_dfs, ignore_index=True)
     all_csv = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all.csv")
     all_features.to_csv(all_csv, index=False)
-    print(f"Wrote combined features -> {all_csv}")
+    logger.info(f"Wrote combined features -> {all_csv}")
 
     # ----------------------
     # Questionnaires: selected values (no plots) + demographics summary (printed)
@@ -1937,14 +1930,14 @@ def main() -> None:
             trigger_col="TriggerValueRight",
         )
         if ydf is not None and (not ydf.empty):
-            print(f"{label}: extracted {len(ydf)} yaw participant×trial rows -> {out_yaw_csv}")
+            logger.info(f"{label}: extracted {len(ydf)} yaw participant×trial rows -> {out_yaw_csv}")
             yaw_dfs.append(ydf)
 
     if yaw_dfs:
         yaw_all = pd.concat(yaw_dfs, ignore_index=True)
         yaw_all_csv = os.path.join(OUTPUT_ROOT, "yaw_trial_features_all.csv")
         yaw_all.to_csv(yaw_all_csv, index=False)
-        print(f"Wrote yaw features -> {yaw_all_csv}")
+        logger.info(f"Wrote yaw features -> {yaw_all_csv}")
 
         key_cols = ["dataset", "participant_id", "video_id"]
         if all(c in all_features.columns for c in key_cols) and all(c in yaw_all.columns for c in key_cols):
@@ -1954,11 +1947,11 @@ def main() -> None:
             all_features = all_features.merge(yaw_merge, on=key_cols, how="left")
             all_csv2 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all_with_yaw.csv")
             all_features.to_csv(all_csv2, index=False)
-            print(f"Wrote combined trigger+yaw features -> {all_csv2}")
+            logger.info(f"Wrote combined trigger+yaw features -> {all_csv2}")
         else:
-            print("[YAW] Could not merge yaw features (missing keys).")
+            logger.warning("[YAW] Could not merge yaw features (missing keys).")
 
-        print("\n=== Yaw ↔ trigger pooled correlations by dataset (trial-level) ===")
+        logger.info("\n=== Yaw ↔ trigger pooled correlations by dataset (trial-level) ===")
         yaw_abs_col = _pick_col(all_features, ["yaw_abs_mean"])
         yaw_fwd_col = _pick_col(all_features, ["yaw_forward_frac_15", "yaw_forward_frac_10"])
         trig_mean_col = _pick_col(all_features, ["trigger_mean", "avg_trigger", "mean_trigger"])
@@ -1966,11 +1959,11 @@ def main() -> None:
         if yaw_abs_col and trig_mean_col:
             for ds, g in all_features.groupby("dataset"):
                 r = _safe_corr(g[yaw_abs_col], g[trig_mean_col], min_n=10)
-                print(f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: n/a")  # noqa: E501
+                logger.info(f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: n/a")  # noqa: E501
         if yaw_fwd_col and unsafe_col:
             for ds, g in all_features.groupby("dataset"):
                 r = _safe_corr(g[yaw_fwd_col], g[unsafe_col], min_n=10)
-                print(f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: n/a")  # noqa: E501
+                logger.info(f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: n/a")  # noqa: E501
 
         # Yaw-focused reporting tables + plots
         try:
@@ -1981,14 +1974,14 @@ def main() -> None:
                 h=h,
             )
         except Exception as e:
-            print(f"[YAW] summarize/plot failed (non-fatal): {e}")
+            logger.error(f"[YAW] summarize/plot failed (non-fatal): {e}")
     else:
         # Fallback: if yaw features were computed in an earlier run, reuse them so yaw summaries/plots are still produced.  # noqa: E501
         yaw_all_csv = os.path.join(OUTPUT_ROOT, "yaw_trial_features_all.csv")
         if os.path.exists(yaw_all_csv):
             try:
                 yaw_all = pd.read_csv(yaw_all_csv)
-                print(f"[YAW] Re-using existing yaw features -> {yaw_all_csv} (rows={len(yaw_all)})")
+                logger.info(f"[YAW] Re-using existing yaw features -> {yaw_all_csv} (rows={len(yaw_all)})")
 
                 # Try merging into the current trigger table if needed (best effort).
                 key_cols = ["dataset", "participant_id", "video_id"]
@@ -1998,7 +1991,7 @@ def main() -> None:
                     all_features = all_features.merge(yaw_merge, on=key_cols, how="left")
                     all_csv2 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all_with_yaw.csv")
                     all_features.to_csv(all_csv2, index=False)
-                    print(f"[YAW] Wrote combined trigger+yaw features -> {all_csv2}")
+                    logger.info(f"[YAW] Wrote combined trigger+yaw features -> {all_csv2}")
 
                 try:
                     summarize_and_plot_yaw_results(
@@ -2008,11 +2001,11 @@ def main() -> None:
                         h=h,
                     )
                 except Exception as e:
-                    print(f"[YAW] summarize/plot failed (non-fatal): {e}")
+                    logger.error(f"[YAW] summarize/plot failed (non-fatal): {e}")
             except Exception as e:
-                print(f"[YAW] Existing yaw features file found but could not be read: {yaw_all_csv} ({e})")
+                logger.error(f"[YAW] Existing yaw features file found but could not be read: {yaw_all_csv} ({e})")
         else:
-            print("[YAW] No yaw columns found in time-series CSVs; skipping yaw features.")
+            logger.error("[YAW] No yaw columns found in time-series CSVs; skipping yaw features.")
 
     _print_dataset_overview(all_features)
     _print_metric_descriptives(all_features, PLOT_METRICS)
@@ -2028,9 +2021,9 @@ def main() -> None:
             response_col_index=2,  # Q2 is in the middle by default
         )
         if qdf is None or qdf.empty:
-            print(f"[Q123] {label}: no Q1/Q2/Q3 trial data found (skipping).")
+            logger.info(f"[Q123] {label}: no Q1/Q2/Q3 trial data found (skipping).")
         else:
-            print(f"[Q123] {label}: loaded {len(qdf)} Q123 trial rows")
+            logger.info(f"[Q123] {label}: loaded {len(qdf)} Q123 trial rows")
             q_dfs.append(qdf)
 
     if q_dfs:
@@ -2043,8 +2036,7 @@ def main() -> None:
         )
         merged_csv = os.path.join(OUTPUT_ROOT, "trigger_trial_features_with_Q123_all.csv")
         merged.to_csv(merged_csv, index=False)
-        print(f"Wrote trigger+Q trial table -> {merged_csv}")
-
+        logger.info(f"Wrote trigger+Q trial table -> {merged_csv}")
 
         # Missingness mechanism analysis for latency metrics (press/release)
         _latency_missingness_analysis(merged, OUTPUT_ROOT, h)
@@ -2055,7 +2047,7 @@ def main() -> None:
         )
         part_csv = os.path.join(OUTPUT_ROOT, "participant_q_behavior_metrics.csv")
         part_metrics.to_csv(part_csv, index=False)
-        print(f"Wrote participant Q–behavior metrics -> {part_csv}")
+        logger.info(f"Wrote participant Q–behavior metrics -> {part_csv}")
 
         # quick descriptives for a few high-signal participant metrics
         key_pm = [c for c in [
@@ -2069,15 +2061,15 @@ def main() -> None:
         ] if c in part_metrics.columns]
         if key_pm:
             desc = part_metrics.groupby("dataset")[key_pm].agg(["count", "mean", "std"])
-            print("\nParticipant-metric descriptives (count/mean/std) for key metrics:")
+            logger.info("\nParticipant-metric descriptives (count/mean/std) for key metrics:")
             with pd.option_context("display.width", 160):
-                print(desc.to_string())
+                logger.info(desc.to_string())
 
         metric_cols = [c for c in part_metrics.columns if c not in ["dataset", "participant_id"]]
         comp_part = compare_participant_metrics(part_metrics, metric_cols, fdr=True)
         comp_csv = os.path.join(OUTPUT_ROOT, "comparison_participant_q_behavior_metrics.csv")
         comp_part.to_csv(comp_csv, index=False)
-        print(f"Wrote participant-metric comparison -> {comp_csv}")
+        logger.info(f"Wrote participant-metric comparison -> {comp_csv}")
         _print_table(comp_part, title="Top participant-level Q–behavior differences (sorted by p/q)", max_rows=15)
 
         # ----------------------
@@ -2104,12 +2096,10 @@ def main() -> None:
                         h=h,
                     )
             except Exception as e:
-                print(f"[plot] factor drift plotting failed: {e}")
+                logger.error(f"[plot] factor drift plotting failed: {e}")
 
     else:
-        print("[Q123] No Q1/Q2/Q3 data found in participant response folders; skipping Q–behavior metrics.")
-
-
+        logger.warning("[Q123] No Q1/Q2/Q3 data found in participant response folders; skipping Q–behavior metrics.")
 
     # ----------------------
     # E. Learning / expectation / sequential effects
@@ -2143,39 +2133,39 @@ def main() -> None:
         e_outcomes = [c for c in e_outcomes if (c not in seen and not seen.add(c))]
 
         if e_outcomes:
-            print("\n=== E: learning/sequential outcomes ===")
-            print("Using outcomes:", e_outcomes)
+            logger.info("\n=== E: learning/sequential outcomes ===")
+            logger.info("Using outcomes:", e_outcomes)
 
             # time-on-task slopes + drift + break reset
             part_learn = _participant_learning_metrics(merged, outcomes=e_outcomes)
             learn_csv = os.path.join(OUTPUT_ROOT, "participant_learning_drift_metrics.csv")
             part_learn.to_csv(learn_csv, index=False)
-            print(f"Wrote participant learning/drift metrics -> {learn_csv}")
+            logger.info(f"Wrote participant learning/drift metrics -> {learn_csv}")
 
             # sequential dependency (switch cost / carryover / autocorr)
             part_seq = _participant_sequential_metrics(merged, outcomes=e_outcomes)
             seq_csv = os.path.join(OUTPUT_ROOT, "participant_sequential_metrics.csv")
             part_seq.to_csv(seq_csv, index=False)
-            print(f"Wrote participant sequential metrics -> {seq_csv}")
+            logger.info(f"Wrote participant sequential metrics -> {seq_csv}")
 
             # merge into a single participant table for comparisons/plots
             part_E = part_learn.merge(part_seq, on=["dataset", "participant_id"], how="outer")
             part_E_csv = os.path.join(OUTPUT_ROOT, "participant_learning_sequential_metrics.csv")
             part_E.to_csv(part_E_csv, index=False)
-            print(f"Wrote combined participant E metrics -> {part_E_csv}")
+            logger.info(f"Wrote combined participant E metrics -> {part_E_csv}")
 
             # log descriptives
             key_cols = [c for c in part_E.columns if c not in ["dataset", "participant_id"]]
             desc = part_E.groupby("dataset")[key_cols].agg(["count", "mean", "std"])
-            print("\nE-metric descriptives (count/mean/std):")
+            logger.info("\nE-metric descriptives (count/mean/std):")
             with pd.option_context("display.width", 180):
-                print(desc.to_string())
+                logger.info(desc.to_string())
 
             # compare shuffled vs unshuffled for participant E metrics
             comp_E = compare_participant_metrics(part_E, key_cols, fdr=True)
             comp_E_csv = os.path.join(OUTPUT_ROOT, "comparison_participant_learning_sequential_metrics.csv")
             comp_E.to_csv(comp_E_csv, index=False)
-            print(f"Wrote participant E-metric comparison -> {comp_E_csv}")
+            logger.info(f"Wrote participant E-metric comparison -> {comp_E_csv}")
             _print_table(comp_E, title="Top participant-level Learning/Sequential differences (sorted by p/q)",
                          max_rows=15)
 
@@ -2195,8 +2185,9 @@ def main() -> None:
                 if not rel.empty:
                     rel_csv = os.path.join(OUTPUT_ROOT, "within_participant_reliability.csv")
                     rel.to_csv(rel_csv, index=False)
-                    print(f"Wrote within-participant reliability -> {rel_csv}")
-                    _print_table(rel, title="Within-participant reliability (split-half; participant means)", max_rows=50)
+                    logger.info(f"Wrote within-participant reliability -> {rel_csv}")
+                    _print_table(rel, title="Within-participant reliability (split-half; participant means)",
+                                 max_rows=50)
 
                     if go is not None:
                         for oc in rel_outcomes:
@@ -2204,7 +2195,6 @@ def main() -> None:
                                 fig = _plot_reliability_scatter(merged, outcome=oc, split=sp)
                                 if fig is not None:
                                     _save_plot(h, fig, name=f"reliability_{oc}_{sp}")
-
 
             # Deeper break analysis: matched-composition pre/post comparisons
             # (last `window_k` vs first `window_k` trials around each break).
@@ -2227,13 +2217,13 @@ def main() -> None:
                 if not part_break.empty:
                     break_csv = os.path.join(OUTPUT_ROOT, "participant_break_matched_metrics.csv")
                     part_break.to_csv(break_csv, index=False)
-                    print(f"Wrote participant break-matched metrics -> {break_csv}")
+                    logger.info(f"Wrote participant break-matched metrics -> {break_csv}")
 
                     break_cols = [c for c in part_break.columns if c.startswith("break_reset_matched_")]
                     comp_break = compare_participant_metrics(part_break, break_cols, fdr=True)
                     comp_break_csv = os.path.join(OUTPUT_ROOT, "comparison_participant_break_matched_metrics.csv")
                     comp_break.to_csv(comp_break_csv, index=False)
-                    print(f"Wrote break-matched metric comparison -> {comp_break_csv}")
+                    logger.info(f"Wrote break-matched metric comparison -> {comp_break_csv}")
                     _print_table(comp_break, title="Top participant-level break-matched differences (sorted by p/q)",
                                  max_rows=15)
 
@@ -2305,29 +2295,44 @@ def main() -> None:
 
             if "dataset" in merged.columns and "shuffled" in merged["dataset"].unique():
                 gsh = merged[merged["dataset"] == "shuffled"].copy()
-                print("\n[E] Shuffled-only quick checks:")
+                logger.info("\n[E] Shuffled-only quick checks:")
                 if transitions is not None and trig_int is not None:
                     r = _safe_corr(pd.to_numeric(gsh[transitions], errors="coerce"),
                                    pd.to_numeric(gsh[trig_int], errors="coerce"), min_n=20)
-                    print(f"pooled corr({transitions}, {trig_int}) in shuffled: r={r:.3f}" if not np.isnan(r) else " pooled corr: n/a")  # noqa: E501
+                    logger.info(f"pooled corr({transitions}, {trig_int}) in shuffled: r={r:.3f}" if not np.isnan(r) else " pooled corr: n/a")  # noqa: E501
         else:
-            print("[E] merged table exists but none of the E outcomes were found; skipping learning/sequential effects.")  # noqa: E501
+            logger.error("[E] merged table exists but none of the E outcomes were found; skipping learning/sequential effects.")  # noqa: E501
     else:
-        print("[E] No merged trial table available; skipping learning/sequential effects.")
+        logger.error("[E] No merged trial table available; skipping learning/sequential effects.")
 
     # ----------------------
     # Statistical comparison
     # ----------------------
+    # Overall comparisons: use participant level aggregation to avoid treating repeated
+    # trials within participant as independent observations.
+    overall_trial = compare_shuffled_unshuffled(
+        all_features,
+        shuffled_label="shuffled",
+        unshuffled_label="unshuffled",
+        groupby=[],
+        fdr=True,
+        unit="trial",
+    )
+    overall_trial_csv = os.path.join(OUTPUT_ROOT, "comparison_overall_trial_level.csv")
+    overall_trial.to_csv(overall_trial_csv, index=False)
+    logger.info(f"Wrote overall trial level comparison -> {overall_trial_csv}")
+
     overall = compare_shuffled_unshuffled(
         all_features,
         shuffled_label="shuffled",
         unshuffled_label="unshuffled",
         groupby=[],
         fdr=True,
+        unit="participant",
     )
     overall_csv = os.path.join(OUTPUT_ROOT, "comparison_overall.csv")
     overall.to_csv(overall_csv, index=False)
-    print(f"Wrote overall comparison -> {overall_csv}")
+    logger.info(f"Wrote overall participant level comparison -> {overall_csv}")
     _print_top_results(overall, title='Top overall differences (sorted by p/q)')
 
     by_cond = compare_shuffled_unshuffled(
@@ -2339,7 +2344,7 @@ def main() -> None:
     )
     by_cond_csv = os.path.join(OUTPUT_ROOT, "comparison_by_condition.csv")
     by_cond.to_csv(by_cond_csv, index=False)
-    print(f"Wrote condition-level comparison -> {by_cond_csv}")
+    logger.info(f"Wrote condition-level comparison -> {by_cond_csv}")
     _print_top_results(by_cond, title='Top condition-level differences (sorted by p/q)')
 
     # Useful factor breakdown (adjust as you like)
@@ -2354,15 +2359,8 @@ def main() -> None:
         )
         by_factors_csv = os.path.join(OUTPUT_ROOT, "comparison_by_factors.csv")
         by_factors.to_csv(by_factors_csv, index=False)
-        print(f"Wrote factor-level comparison -> {by_factors_csv}")
+        logger.info(f"Wrote factor-level comparison -> {by_factors_csv}")
         _print_top_results(by_factors, title='Top factor-level differences (sorted by p/q)')
-
-    # ----------------------
-    # Quick plots (optional)
-    # ----------------------
-    if px is None:
-        print("plotly.express not available; skipping plots")
-        return
 
     # Use your project's preferred saving helper (saves eps/png/html)
 
@@ -2414,7 +2412,7 @@ def main() -> None:
             # Print pooled correlations by dataset
             for ds, g in merged.groupby("dataset"):
                 r = _safe_corr(g["Q3"], g[vol_col], min_n=10)
-                print(f"[stats] pooled corr(Q3, {vol_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(Q3, {vol_col}) in {ds}: n/a")  # noqa: E501
+                logger.info(f"[stats] pooled corr(Q3, {vol_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(Q3, {vol_col}) in {ds}: n/a")  # noqa: E501
             fig = px.scatter(
                 merged,
                 x="Q3",
@@ -2428,7 +2426,7 @@ def main() -> None:
         if trans_col is not None and "Q3" in merged.columns:
             for ds, g in merged.groupby("dataset"):
                 r = _safe_corr(g["Q3"], g[trans_col], min_n=10)
-                print(f"[stats] pooled corr(Q3, {trans_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(Q3, {trans_col}) in {ds}: n/a")
+                logger.info(f"[stats] pooled corr(Q3, {trans_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(Q3, {trans_col}) in {ds}: n/a")  # noqa:E501
             fig = px.scatter(
                 merged,
                 x="Q3",
@@ -2442,7 +2440,7 @@ def main() -> None:
         if unsafe_col is not None and "Q2" in merged.columns:
             for ds, g in merged.groupby("dataset"):
                 r = _safe_corr(g["Q2"], g[unsafe_col], min_n=10)
-                print(f"[stats] pooled corr(Q2, {unsafe_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(Q2, {unsafe_col}) in {ds}: n/a")
+                logger.info(f"[stats] pooled corr(Q2, {unsafe_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(Q2, {unsafe_col}) in {ds}: n/a")  # noqa:E501
             fig = px.scatter(
                 merged,
                 x="Q2",
@@ -2592,15 +2590,16 @@ def main() -> None:
                 for ds, g in all_features.groupby("dataset"):
                     r = _safe_corr(pd.to_numeric(g["yaw_sd"], errors="coerce"),
                                    pd.to_numeric(g[vol_col2], errors="coerce"), min_n=10)
-                    print(f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: n/a")  # noqa: E501
+                    logger.info(f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: n/a")  # noqa: E501
                 fig = px.scatter(all_features, x="yaw_sd", y=vol_col2, color="dataset", hover_data=hover_cols2)
                 fig.update_layout(title=f"Trial-level coupling: yaw_sd vs {vol_col2}")
                 _save_plot(h, fig, name=f"scatter_yaw_sd_vs_{vol_col2}")
 
             if "yaw_forward_frac_15" in all_features.columns and "Q3" in all_features.columns:
                 for ds, g in all_features.groupby("dataset"):
-                    r = _safe_corr(pd.to_numeric(g["yaw_forward_frac_15"], errors="coerce"), pd.to_numeric(g["Q3"], errors="coerce"), min_n=10)
-                    print(f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: n/a")  # noqa: E501
+                    r = _safe_corr(pd.to_numeric(g["yaw_forward_frac_15"], errors="coerce"),
+                                   pd.to_numeric(g["Q3"], errors="coerce"), min_n=10)
+                    logger.info(f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: n/a")  # noqa: E501
                 fig = px.scatter(all_features, x="yaw_forward_frac_15", y="Q3", color="dataset",
                                  hover_data=hover_cols2)
                 fig.update_layout(title="Trial-level coupling: yaw_forward_frac_15 vs Q3 (understanding)")
@@ -2643,7 +2642,6 @@ def main() -> None:
                     fig.update_layout(title=f"{c}: shuffled vs unshuffled (within-trial coupling)")
                     _save_plot(h, fig, name=f"compare_violin_{c}")
 
-
     # -----------------------------------------------------------------------
     # F1) Individual differences (questionnaires) as moderators
     # -----------------------------------------------------------------------
@@ -2660,7 +2658,7 @@ def main() -> None:
         # earlier release in yielding
         if "latency_first_release_s" in base_trials.columns and "yielding" in base_trials.columns:
             outcome_defs["release_latency_yielding_mean"] = ("latency_first_release_s",
-    "press_release_hysteresis", {"yielding": 1})
+                                                             "press_release_hysteresis", {"yielding": 1})
         # yaw volatility proxy
         yaw_vol_col = _pick_col(base_trials, ["yaw_speed_p95", "yaw_speed_mean", "yaw_sd", "yaw_iqr"])
         if yaw_vol_col is not None:
@@ -2720,10 +2718,10 @@ def main() -> None:
 
         # Run moderation stats
         mod_results = []
-        print("\n=== F1 Moderation (questionnaires) ===")
-        print(f"[F1] moderators: {len(moderator_cols)} | outcomes: {outcome_cols}")
+        logger.info("\n=== F1 Moderation (questionnaires) ===")
+        logger.info(f"[F1] moderators: {len(moderator_cols)} | outcomes: {outcome_cols}")
         for ds, g in mod_df.groupby("dataset"):
-            print(f"[F1] dataset={ds}: n_participants_with_outcomes={g['participant_id'].nunique()}")
+            logger.info(f"[F1] dataset={ds}: n_participants_with_outcomes={g['participant_id'].nunique()}")
             for mcol in moderator_cols:
                 for ocol in outcome_cols:
                     r, p, n = _corr_with_p(g[mcol], g[ocol], min_n=6)
@@ -2769,7 +2767,7 @@ def main() -> None:
         if mod_res.shape[0] > 0:
             mod_path = os.path.join(OUTPUT_ROOT, "moderation_questionnaire_results.csv")
             mod_res.to_csv(mod_path, index=False)
-            print(f"[F1] wrote: {mod_path}")
+            logger.info(f"[F1] wrote: {mod_path}")
 
             # Log: top correlations (abs r) per outcome
             for ocol in outcome_cols:
@@ -2831,7 +2829,7 @@ def main() -> None:
                     _save_plot(h, fig, name=f"F1_violin_{ocol}_by_{mcol}_median_split")
 
     except Exception as e:
-        print(f"[F1] skipped questionnaire moderation: {e}")
+        logger.error(f"[F1] skipped questionnaire moderation: {e}")
 
     # -----------------------------------------------------------------------
     # F2) Condition discriminability (signal detection framing): yielding vs not
@@ -2857,9 +2855,10 @@ def main() -> None:
 
         auc_rows = []
         roc_curves = {}  # (dataset, signal) -> (fpr,tpr)
-        print("\n=== F2 Discriminability (yielding vs not) ===")
+        logger.info("\n=== F2 Discriminability (yielding vs not) ===")
         for ds, g in dfD.groupby("dataset"):
-            y = pd.to_numeric(g["yielding"], errors="coerce").dropna().astype(int).values
+            y = pd.to_numeric(g["yielding"],  # noqa:F841
+                              errors="coerce").dropna().astype(int).values
             # use same mask per signal inside loop
             for sig in signals:
                 s = pd.to_numeric(g[sig], errors="coerce").values
@@ -2887,7 +2886,7 @@ def main() -> None:
 
         auc_path = os.path.join(OUTPUT_ROOT, "discriminability_yielding_auc.csv")
         auc_df.to_csv(auc_path, index=False)
-        print(f"[F2] wrote: {auc_path}")
+        logger.info(f"[F2] wrote: {auc_path}")
 
         # Compare AUC shuffled vs unshuffled (delta)
         if set(auc_df["dataset"].unique()) >= set(["shuffled", "unshuffled"]):
@@ -2899,7 +2898,7 @@ def main() -> None:
                 delta_path = os.path.join(OUTPUT_ROOT, "discriminability_yielding_auc_delta.csv")
                 piv.to_csv(delta_path, index=False)
                 _print_table(piv.head(15), title="=== F2 AUC delta (shuffled - unshuffled) ===", max_rows=15)
-                print(f"[F2] wrote: {delta_path}")
+                logger.info(f"[F2] wrote: {delta_path}")
 
         # Plots
         if px is not None:
@@ -2925,7 +2924,8 @@ def main() -> None:
                 if sig not in top_signals:
                     continue
                 for a, b in zip(fpr, tpr):
-                    curve_rows.append({"dataset": ds, "signal": sig, "fpr": float(a), "tpr": float(b), "auc": float(auc)})
+                    curve_rows.append({"dataset": ds, "signal": sig, "fpr": float(a),
+                                       "tpr": float(b), "auc": float(auc)})
             if curve_rows:
                 cdf = pd.DataFrame(curve_rows)
                 fig = px.line(
@@ -2936,11 +2936,12 @@ def main() -> None:
                     line_dash="signal",
                     hover_data=["auc"],
                 )
-                fig.update_layout(title="ROC curves (top signals), yielding vs not", xaxis_title="False Positive Rate", yaxis_title="True Positive Rate")
+                fig.update_layout(title="ROC curves (top signals), yielding vs not",
+                                  xaxis_title="False Positive Rate", yaxis_title="True Positive Rate")
                 _save_plot(h, fig, name="F2_roc_curves_top_signals")
 
     except Exception as e:
-        print(f"[F2] skipped discriminability analysis: {e}")
+        logger.error(f"[F2] skipped discriminability analysis: {e}")
 
 
 # ---------------------------------------------------------------------------

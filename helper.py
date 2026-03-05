@@ -373,7 +373,8 @@ class HMD_helper:
             df.to_csv(output_path, index=False)
 
     def save_plotly(self, fig, name, remove_margins=False, width=1320, height=680, save_eps=True, save_png=True,
-                    save_html=True, open_browser=True, save_mp4=False, save_final=False):
+                    save_html=True, open_browser=True, save_mp4=False, save_final=False, strip_title=True,
+                    strip_subplot_titles=True):
         """
         Helper function to save figure as html file.
 
@@ -406,6 +407,34 @@ class HMD_helper:
         # limit name to max 200 char (for Windows)
         if len(path) + len(name) > 195 or len(path_final) + len(name) > 195:
             name = name[:200 - len(path) - 5]
+
+        # Remove titles from the figure itself (keeps the HTML file name and address intact).
+        # This affects both the HTML and any exported static images.
+        if strip_title:
+            try:
+                fig.update_layout(title_text=None)
+            except Exception:
+                pass
+
+        # Remove subplot titles created via make_subplots(..., subplot_titles=[...]).
+        # These are stored as layout.annotations near the top of the figure.
+        if strip_subplot_titles:
+            try:
+                anns = list(getattr(fig.layout, 'annotations', []) or [])
+                kept = []
+                for a in anns:
+                    y = getattr(a, 'y', None)
+                    xref = getattr(a, 'xref', None)
+                    yref = getattr(a, 'yref', None)
+                    showarrow = getattr(a, 'showarrow', None)
+
+                    # Heuristic: subplot titles are paper referenced, arrowless annotations at y around 1.
+                    if (xref == 'paper' and yref == 'paper' and showarrow is False and isinstance(y, (int, float)) and y >= 0.98):
+                        continue
+                    kept.append(a)
+                fig.update_layout(annotations=kept)
+            except Exception:
+                pass
 
         # save as html
         if save_html:

@@ -34,6 +34,7 @@ from statsmodels.stats.multitest import multipletests  # noqa:F401
 # Project helpers (used for plot output directories).
 from helper import HMD_helper
 import common  # project module used by HMD_helper.save_plotly
+from custom_logger import CustomLogger
 
 # Shared yaw/quaternion column heuristics.
 # These are used by file-selection helpers (e.g., `_score_trial_file`) and yaw feature extraction.
@@ -41,6 +42,7 @@ import common  # project module used by HMD_helper.save_plotly
 from csu_yaw_constants import _YAW_CANDIDATES, _QUAT_REGEX, _QUAT_LIST_COL_PAT  # noqa:F401
 
 HAVE_SM = True
+logger = CustomLogger(__name__)  # use custom logger
 
 
 # -----------------------
@@ -449,14 +451,33 @@ def _build_cond_key(df: pd.DataFrame) -> pd.Series:
     return pd.Series(["cond"] * len(df), index=df.index)
 
 
-def compare_shuffled_unshuffled(features_df: pd.DataFrame, dataset_col: str = "dataset",
-                                shuffled_label: str = "shuffled", unshuffled_label: str = "unshuffled",
-                                metrics: Optional[List[str]] = None, groupby: Optional[List[str]] = None,
-                                equal_var: bool = False, fdr: bool = True) -> pd.DataFrame:
+def compare_shuffled_unshuffled(
+    features_df: pd.DataFrame,
+    dataset_col: str = "dataset",
+    shuffled_label: str = "shuffled",
+    unshuffled_label: str = "unshuffled",
+    metrics: Optional[List[str]] = None,
+    groupby: Optional[List[str]] = None,
+    equal_var: bool = False,
+    fdr: bool = True,
+    *,
+    unit: str = "trial",
+    participant_col: str = "participant_id",
+) -> pd.DataFrame:
     """Statistical comparison between shuffled vs unshuffled.
 
-    Produces a tidy table with group keys (if any), metric name, n/mean/sd per dataset,
-    Welch t-test p-values, Cohen's d, and optional BH-FDR corrected p-values.
+    IMPORTANT
+    - If unit is "trial" (default), the function treats rows as independent observations.
+      This is fine for between subject tables where each participant contributes at most
+      one row per group (eg grouped by condition_name).
+    - If unit is "participant", the function aggregates each metric to a participant level
+      mean within each group (dataset + groupby + participant_id) before running the test.
+      This avoids the clustering violation that occurs when many trials per participant
+      are analysed as if they were independent.
+
+    Output
+    Produces a tidy table with group keys (if any), metric name, n mean sd per dataset,
+    t test p values, Cohen's d, and optional BH FDR corrected p values.
 
     This is implemented locally so the script does not depend on helper.HMD_helper having
     the method (repo versions may differ).
@@ -479,7 +500,7 @@ def compare_shuffled_unshuffled(features_df: pd.DataFrame, dataset_col: str = "d
             # Drop unavailable groupers rather than raising.
             keep = [c for c in groupby if c in df.columns]
             if keep != groupby:
-                print(f"[compare] Dropping missing group-by columns: {missing_gb}. Using: {keep if keep else 'overall'}")  # noqa: E501
+                logger.warning(f"[compare] Dropping missing group-by columns: {missing_gb}. Using: {keep if keep else 'overall'}")  # noqa: E501
             groupby = keep
 
     df = df[df[dataset_col].isin([shuffled_label, unshuffled_label])]
@@ -526,6 +547,27 @@ def compare_shuffled_unshuffled(features_df: pd.DataFrame, dataset_col: str = "d
         if m in df.columns:
             df[m] = pd.to_numeric(df[m], errors="coerce")
 
+    # Optional: participant level aggregation to avoid clustering violations when many
+    # trials per participant are present.
+    unit_norm = str(unit).strip().lower()
+    if unit_norm in {"participant", "participant_mean", "cluster", "clustered"}:
+        if participant_col in df.columns:
+            agg_cols: List[str] = []
+            if groupby:
+                agg_cols.extend(list(groupby))
+            agg_cols.extend([dataset_col, participant_col])
+            # Each metric becomes the participant mean within each group
+            df = (
+                df.groupby(agg_cols, dropna=False)[metrics]
+                .mean()
+                .reset_index()
+            )
+        else:
+            logger.warning(f"[compare] unit=participant requested but {participant_col} missing; using trial level")
+            unit_norm = "trial"
+    else:
+        unit_norm = "trial"
+
     if groupby:
         groups = df.groupby(groupby, dropna=False)
     else:
@@ -559,6 +601,7 @@ def compare_shuffled_unshuffled(features_df: pd.DataFrame, dataset_col: str = "d
 
             rows.append({
                 **gdict,
+                "unit": unit_norm,
                 "metric": m,
                 "n_shuffled": int(len(xa)),
                 "mean_shuffled": float(np.mean(xa)) if len(xa) else np.nan,
@@ -589,12 +632,12 @@ def compare_shuffled_unshuffled(features_df: pd.DataFrame, dataset_col: str = "d
 
 
 def _print_table(df: pd.DataFrame, title: str, max_rows: int = 12) -> None:
-    print("\n" + title)
+    logger.info("\n" + title)
     if df is None or df.empty:
-        print("(empty)")
+        logger.info("(empty)")
         return
     with pd.option_context("display.max_rows", max_rows, "display.max_columns", 50, "display.width", 160):
-        print(df.head(max_rows).to_string(index=False))
+        logger.info(df.head(max_rows).to_string(index=False))
 
 
 def _pick_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
@@ -636,16 +679,8 @@ def _resolve_plot_dirs(h: HMD_helper, out_root: Optional[str] = None) -> List[st
     return [d for d in out_dirs if d and not (d in seen or seen.add(d))]
 
 
-
-
-def _save_plot(
-    h: HMD_helper,
-    fig,
-    name: str,
-    out_root: Optional[str] = None,
-    record_index: bool = True,
-    open_browser: bool = True,
-) -> None:
+def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, record_index: bool = True,
+               open_browser: bool = True) -> None:
     """
     Save a Plotly figure.
 
@@ -669,6 +704,10 @@ def _save_plot(
         open_browser = str(env_open).strip().lower() in {'1', 'true', 'yes', 'y'}
 
     # If we have the project's helper, prefer it. It handles Kaleido MathJax quirks and browser opening.
+    # NOTE: Some variants of HMD_helper.save_plotly also save PDF outputs. This project does not need PDF.
+    # We therefore:
+    # 1) Pass flags to disable PDF where supported (eg save_pdf, save_final).
+    # 2) Always do an explicit EPS export ourselves as a backstop.
     try:
         if hasattr(h, "save_plotly"):
             # HMD_helper.save_plotly saves to `common.get_configs("output")` (and optionally to h.folder_figures).
@@ -685,27 +724,86 @@ def _save_plot(
                     return False
 
             if (out_root is None) or _same_dir(out_root, common_out):
-                h.save_plotly(
-                    fig,
-                    name=name,
-                    remove_margins=False,
-                    width=1320,
-                    height=680,
-                    save_eps=True,
-                    save_png=True,
-                    save_html=True,
-                    open_browser=bool(open_browser),
-                    save_mp4=False,
-                    save_final=True,
-                )
+                # Build kwargs defensively across helper versions.
+                # Only pass parameters that exist in the helper signature.
+                import inspect
+
+                params = set()
+                try:
+                    params = set(inspect.signature(h.save_plotly).parameters.keys())
+                except Exception:
+                    params = set()
+
+                kwargs = {}
+                if 'name' in params:
+                    kwargs['name'] = name
+                if 'remove_margins' in params:
+                    kwargs['remove_margins'] = False
+                if 'width' in params:
+                    kwargs['width'] = 1320
+                if 'height' in params:
+                    kwargs['height'] = 680
+                if 'save_eps' in params:
+                    kwargs['save_eps'] = True
+                if 'save_png' in params:
+                    kwargs['save_png'] = True
+                if 'save_html' in params:
+                    kwargs['save_html'] = True
+                if 'open_browser' in params:
+                    kwargs['open_browser'] = bool(open_browser)
+                if 'save_mp4' in params:
+                    kwargs['save_mp4'] = False
+                # Disable PDF like outputs where the helper supports it.
+                if 'save_pdf' in params:
+                    kwargs['save_pdf'] = False
+                # Many helper versions use save_final to create additional final exports (often PDF).
+                if 'save_final' in params:
+                    kwargs['save_final'] = False
+
+                h.save_plotly(fig, **kwargs)
+
+                # Even if the helper ran, ensure EPS exists (and remove any PDF created).
+                out_dirs = _resolve_plot_dirs(h, out_root=out_root)
+                for d in out_dirs:
+                    try:
+                        os.makedirs(d, exist_ok=True)
+                    except Exception:
+                        continue
+
+                    # EPS backstop
+                    try:
+                        fig.write_image(os.path.join(d, f"{name}.eps"), width=1320, height=680)
+                    except Exception as e:
+                        if not _KALEIDO_WARNED:
+                            _KALEIDO_WARNED = True
+                            logger.warning(f"[plot] NOTE: EPS export needs Kaleido. If missing, run: pip install -U kaleido. (first error: {e})")  # noqa: E501
+
+                    # Remove PDF if the helper created one
+                    try:
+                        import glob
+                        patterns = [
+                            os.path.join(d, f"{name}*.pdf"),
+                            os.path.join(d, "final", f"{name}*.pdf"),
+                            os.path.join(d, "pdf", f"{name}*.pdf"),
+                        ]
+                        for pat in patterns:
+                            for pdf_path in glob.glob(pat):
+                                try:
+                                    if os.path.isfile(pdf_path):
+                                        os.remove(pdf_path)
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+
                 return
     except Exception as e:
-        print(f"[plot] NOTE: HMD_helper.save_plotly failed for {name}: {e}. Falling back to fig.write_html.")
+        logger.error(f"[plot] NOTE: HMD_helper.save_plotly failed for {name}: {e}. Falling back to fig.write_html.")
 
     # ---- Fallback multi directory saving ----
     out_dirs = _resolve_plot_dirs(h, out_root=out_root)
     if not out_dirs:
-        print(f"[plot] SKIP {name}: no output directories resolved")
+        logger.warning(f"[plot] SKIP {name}: no output directories resolved")
         return
 
     wrote_html: List[str] = []
@@ -725,7 +823,7 @@ def _save_plot(
             if record_index and (d == primary_out):
                 _PLOTS_WRITTEN.append((name, html_path))
         except Exception as e:
-            print(f"[plot] FAILED html {html_path}: {e}")
+            logger.error(f"[plot] FAILED html {html_path}: {e}")
 
         # Make Kaleido more robust (MathJax is a frequent culprit).
         try:
@@ -743,7 +841,7 @@ def _save_plot(
         except Exception as e:
             if not _KALEIDO_WARNED:
                 _KALEIDO_WARNED = True
-                print(f"[plot] NOTE: PNG and EPS export needs Kaleido. If missing, run: pip install -U kaleido. (first error: {e})")
+                logger.warning(f"[plot] NOTE: PNG and EPS export needs Kaleido. If missing, run: pip install -U kaleido. (first error: {e})")  # noqa: E501
 
         # EPS
         try:
@@ -760,9 +858,10 @@ def _save_plot(
             pass
 
     if wrote_html:
-        print(f"[plot] wrote: {name} -> " + ", ".join(wrote_html))
+        logger.info(f"[plot] wrote: {name} -> " + ", ".join(wrote_html))
     else:
-        print(f"[plot] FAILED to write any HTML for {name}")
+        logger.info(f"[plot] FAILED to write any HTML for {name}")
+
 
 def _write_plot_index_and_open(h: HMD_helper) -> None:
     """Write a single HTML index linking all recorded plots, then auto-open it (one tab)."""
@@ -804,7 +903,7 @@ def _write_plot_index_and_open(h: HMD_helper) -> None:
         except Exception:
             pass
     except Exception as e:
-        print(f"[plot] FAILED to write index: {e}")
+        logger.error(f"[plot] FAILED to write index: {e}")
 
 
 def _lin_slope(x: np.ndarray, y: np.ndarray) -> dict:
@@ -860,7 +959,7 @@ def _read_csv_loose(path: str) -> Optional[pd.DataFrame]:
         try:
             return pd.read_csv(path, sep=";")
         except Exception as e:
-            print(f"[Q] Could not read CSV {path}: {e}")
+            logger.error(f"[Q] Could not read CSV {path}: {e}")
             return None
 
 

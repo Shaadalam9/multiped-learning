@@ -26,6 +26,7 @@ import statsmodels.api as sm  # noqa:F401
 from statsmodels.stats.multitest import multipletests  # noqa:F401
 
 from helper import HMD_helper
+from custom_logger import CustomLogger
 
 # Shared helpers (kept as names to avoid editing the original function bodies)
 from csu_core import (  # noqa: F401
@@ -41,6 +42,7 @@ from csu_core import (  # noqa: F401
 )
 
 HAVE_SM = True
+logger = CustomLogger(__name__)  # use custom logger
 
 
 # ----------------------
@@ -70,9 +72,10 @@ def _mm_logit(p: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     return np.log(p / (1 - p))
 
 
-def _mm_fit_mixedlm(formula: str, df: pd.DataFrame, group_col: str = "participant_id", re_formula: str = "1") -> Optional[object]:
+def _mm_fit_mixedlm(formula: str, df: pd.DataFrame, group_col: str = "participant_id",
+                    re_formula: str = "1") -> Optional[object]:
     if not HAVE_SM or smf is None:
-        print("[MM] statsmodels not available; skipping MixedLM.")
+        logger.warning("[MM] statsmodels not available; skipping MixedLM.")
         return None
     try:
         with warnings.catch_warnings():
@@ -81,7 +84,7 @@ def _mm_fit_mixedlm(formula: str, df: pd.DataFrame, group_col: str = "participan
             res = model.fit(reml=False, method="lbfgs", maxiter=800, disp=False)
         return res
     except Exception as e:
-        print(f"[MM] MixedLM FAILED: {e}\n  formula: {formula}")
+        logger.error(f"[MM] MixedLM FAILED: {e}\n  formula: {formula}")
         return None
 
 
@@ -120,14 +123,15 @@ def _mm_extract_fixed_effects(res, dv: str, model: str, keep_regex: Optional[str
 def _mm_tost_equivalence(b: float, se: float, delta: float) -> Dict[str, float]:
     """Normal-approx TOST on a coefficient."""
     if np.isnan(b) or np.isnan(se) or se <= 0 or np.isnan(delta) or delta <= 0:
-        return {"delta": float(delta) if delta is not None else np.nan, "p_tost": np.nan, "p_lower": np.nan, "p_upper": np.nan}
+        return {"delta": float(delta) if delta is not None else np.nan,
+                "p_tost": np.nan, "p_lower": np.nan, "p_upper": np.nan}
 
     # z tests
     z_lower = (b + delta) / se  # test b > -delta
     z_upper = (b - delta) / se  # test b < +delta
 
     # Phi via erf
-    Phi = lambda z: 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+    Phi = lambda z: 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))  # noqa:E731
     p_lower = 1 - Phi(z_lower)
     p_upper = Phi(z_upper)
     p_tost = max(p_lower, p_upper)
@@ -181,8 +185,10 @@ def _mm_means_plot(df: pd.DataFrame, dv: str, factor: str, name: str, h: HMD_hel
         for ds in out["dataset"].unique():
             sub = out[out["dataset"] == ds].sort_values(factor)
             fig.add_trace(go.Scatter(x=sub[factor], y=sub["mean"], mode="lines+markers", name=str(ds)))
-            fig.add_trace(go.Scatter(x=sub[factor], y=sub["ci_hi"], mode="lines", line=dict(width=0), showlegend=False))
-            fig.add_trace(go.Scatter(x=sub[factor], y=sub["ci_lo"], mode="lines", line=dict(width=0), fill="tonexty", showlegend=False))
+            fig.add_trace(go.Scatter(x=sub[factor], y=sub["ci_hi"], mode="lines",
+                                     line=dict(width=0), showlegend=False))
+            fig.add_trace(go.Scatter(x=sub[factor], y=sub["ci_lo"], mode="lines",
+                                     line=dict(width=0), fill="tonexty", showlegend=False))
         fig.update_layout(title=f"{dv}: dataset × {factor} (means ±95% CI)", xaxis_title=factor, yaxis_title=dv)
         _save_plot(h, fig, name=name)
     else:
@@ -195,10 +201,14 @@ def _mm_make_full_formula(df: pd.DataFrame, dv: str) -> str:
     # Full factorial (may fail; we fallback if needed).
     parts = []
     parts.append("C(dataset)")
-    if "yielding" in df.columns: parts.append("yielding")
-    if "eHMIOn" in df.columns: parts.append("eHMIOn")
-    if "camera" in df.columns: parts.append("C(camera)")
-    if "distPed" in df.columns: parts.append("C(distPed)")
+    if "yielding" in df.columns:
+        parts.append("yielding")
+    if "eHMIOn" in df.columns:
+        parts.append("eHMIOn")
+    if "camera" in df.columns:
+        parts.append("C(camera)")
+    if "distPed" in df.columns:
+        parts.append("C(distPed)")
     rhs = " * ".join(parts)
     return f"{dv} ~ {rhs}"
 
@@ -266,17 +276,17 @@ def _between_subject_balance_and_sensitivity(
       - between_subject_sensitivity_baseline_comparison.csv
       - between_subject_balance_report.txt
     """
-    print("\n=== [C] Between-subject balance & sensitivity ===")
+    logger.info("\n=== [C] Between-subject balance & sensitivity ===")
     _ensure_dir(out_root)
 
     if merged is None or merged.empty:
-        print("[C] merged trial table missing/empty; skipping between-subject checks.")
+        logger.info("[C] merged trial table missing/empty; skipping between-subject checks.")
         return
 
     # --- core identifiers ---
     required = [c for c in ["dataset", "participant_id", "video_id"] if c in merged.columns]
     if len(required) < 2:
-        print(f"[C] merged missing required id cols (have {required}); skipping.")
+        logger.info(f"[C] merged missing required id cols (have {required}); skipping.")
         return
 
     # --- participant counts ---
@@ -284,7 +294,7 @@ def _between_subject_balance_and_sensitivity(
     part_counts = parts.groupby("dataset").size().reset_index(name="n_participants")
     part_counts_csv = os.path.join(out_root, "between_subject_participants.csv")
     part_counts.to_csv(part_counts_csv, index=False)
-    print(f"[C] wrote: {part_counts_csv} ({len(part_counts)} rows)")
+    logger.info(f"[C] wrote: {part_counts_csv} ({len(part_counts)} rows)")
 
     # --- trial completion per participant (unique video_id) ---
     main_mask = pd.Series(True, index=merged.index)
@@ -305,7 +315,7 @@ def _between_subject_balance_and_sensitivity(
 
     trials_csv = os.path.join(out_root, "between_subject_trials_per_participant.csv")
     trials_pp.to_csv(trials_csv, index=False)
-    print(f"[C] wrote: {trials_csv} ({len(trials_pp)} rows)")
+    logger.info(f"[C] wrote: {trials_csv} ({len(trials_pp)} rows)")
 
     # --- per-participant missingness for key outcomes ---
     # pick candidate outcomes that should exist across datasets
@@ -325,7 +335,7 @@ def _between_subject_balance_and_sensitivity(
     miss_pp = pd.DataFrame(miss_rows) if miss_rows else pd.DataFrame(columns=["dataset", "participant_id"])
     miss_csv = os.path.join(out_root, "between_subject_missingness_per_participant.csv")
     miss_pp.to_csv(miss_csv, index=False)
-    print(f"[C] wrote: {miss_csv} ({len(miss_pp)} rows)")
+    logger.info(f"[C] wrote: {miss_csv} ({len(miss_pp)} rows)")
 
     # --- baseline (early) participant means: first K main trials ---
     K = 8
@@ -351,7 +361,7 @@ def _between_subject_balance_and_sensitivity(
     base_pp = pd.DataFrame(base_rows) if base_rows else pd.DataFrame(columns=["dataset", "participant_id"])
     base_csv = os.path.join(out_root, "between_subject_baseline_metrics.csv")
     base_pp.to_csv(base_csv, index=False)
-    print(f"[C] wrote: {base_csv} ({len(base_pp)} rows)")
+    logger.info(f"[C] wrote: {base_csv} ({len(base_pp)} rows)")
 
     # baseline comparisons (balance check)
     base_metric_cols = [c for c in base_pp.columns if c.startswith("baseline_mean_") and c not in ("dataset",
@@ -360,7 +370,7 @@ def _between_subject_balance_and_sensitivity(
         comp_base = compare_participant_metrics(base_pp, base_metric_cols, fdr=True)
         comp_base_csv = os.path.join(out_root, "between_subject_baseline_comparison.csv")
         comp_base.to_csv(comp_base_csv, index=False)
-        print(f"[C] wrote: {comp_base_csv} ({len(comp_base)} rows)")
+        logger.info(f"[C] wrote: {comp_base_csv} ({len(comp_base)} rows)")
 
     # --- sensitivity: filter low completion / high missingness then rerun baseline compare ---
     # thresholds based on robust dataset-wise summaries
@@ -381,7 +391,7 @@ def _between_subject_balance_and_sensitivity(
         comp_sens = compare_participant_metrics(base_filt, sens_metric_cols, fdr=True)
         comp_sens_csv = os.path.join(out_root, "between_subject_sensitivity_baseline_comparison.csv")
         comp_sens.to_csv(comp_sens_csv, index=False)
-        print(f"[C] wrote: {comp_sens_csv} ({len(comp_sens)} rows)")
+        logger.info(f"[C] wrote: {comp_sens_csv} ({len(comp_sens)} rows)")
 
     # --- optional: incorporate participant E-metrics (learning/sequential) into balance report ---
     if part_E is not None and isinstance(part_E, pd.DataFrame) and (not part_E.empty):
@@ -391,7 +401,7 @@ def _between_subject_balance_and_sensitivity(
             comp_E = compare_participant_metrics(part_E, em_cols, fdr=True)
             comp_E_csv = os.path.join(out_root, "between_subject_participantE_comparison.csv")
             comp_E.to_csv(comp_E_csv, index=False)
-            print(f"[C] wrote: {comp_E_csv} ({len(comp_E)} rows)")
+            logger.info(f"[C] wrote: {comp_E_csv} ({len(comp_E)} rows)")
 
     # --- report text ---
     report_lines = []
@@ -410,7 +420,7 @@ def _between_subject_balance_and_sensitivity(
     report_path = os.path.join(out_root, "between_subject_balance_report.txt")
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("\n".join(report_lines))
-    print(f"[C] wrote: {report_path}")
+    logger.info(f"[C] wrote: {report_path}")
 
     # --- plots (best-effort; do not fail the pipeline) ---
     try:
@@ -449,7 +459,7 @@ def _between_subject_balance_and_sensitivity(
                                            yaxis_title=f"baseline mean {oc}")
                         _save_plot(h, figb, name=f"between_subject_baseline_mean_{oc}")
     except Exception as e:
-        print(f"[C] plotting failed (non-fatal): {e}")
+        logger.info(f"[C] plotting failed (non-fatal): {e}")
 
 
 def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
@@ -461,10 +471,10 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
         p1 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_with_Q123_all.csv")
         p2 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all.csv")
         if os.path.exists(p1):
-            print(f"[MM] reading {p1}")
+            logger.info(f"[MM] reading {p1}")
             trial_df = pd.read_csv(p1)
         elif os.path.exists(p2):
-            print(f"[MM] reading {p2}")
+            logger.info(f"[MM] reading {p2}")
             trial_df = pd.read_csv(p2)
         else:
             raise FileNotFoundError(f"[MM] Could not find combined CSV in {OUTPUT_ROOT}. Run the pipeline first.")
@@ -483,7 +493,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
     dv_unsafe = "frac_time_unsafe" if "frac_time_unsafe" in df.columns else None
 
     dvs = [x for x in [dv_trigger, dv_trans, dv_q3, dv_yaw, dv_unsafe] if x is not None]
-    print(f"[MM] DVs found: {dvs}")
+    logger.info(f"[MM] DVs found: {dvs}")
 
     work = df.copy()
     if dv_unsafe is not None:
@@ -494,9 +504,9 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
     # ------------------------------------------------------------
     # 1) Primary test: dataset × condition interactions (MixedLM)
     # ------------------------------------------------------------
-    print("\n=== [MM1] dataset × condition interactions (MixedLM) ===")
+    logger.info("\n=== [MM1] dataset × condition interactions (MixedLM) ===")
     if not HAVE_SM:
-        print("[MM1] statsmodels not installed; skipping MixedLM fits.")
+        logger.info("[MM1] statsmodels not installed; skipping MixedLM fits.")
     else:
         coef_rows = []
         tost_rows = []
@@ -517,12 +527,12 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
             full_formula = _mm_make_full_formula(dfit, dv_model)
             stable_formula = _mm_make_stable_formula(dfit, dv_model)
 
-            print(f"\n[MM1] DV={dv} (model DV={dv_model})")
-            print(f"  try full:   {full_formula}")
+            logger.info(f"\n[MM1] DV={dv} (model DV={dv_model})")
+            logger.info(f"  try full:   {full_formula}")
             res = _mm_fit_mixedlm(full_formula, dfit, group_col="participant_id", re_formula="1")
             used_formula = "full"
             if res is None:
-                print(f"  -> fallback stable: {stable_formula}")
+                logger.info(f"  -> fallback stable: {stable_formula}")
                 res = _mm_fit_mixedlm(stable_formula, dfit, group_col="participant_id", re_formula="1")
                 used_formula = "stable"
 
@@ -562,7 +572,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
             coef_df.to_csv(out_path, index=False)
             _print_table(coef_df.sort_values("q_fdr").head(25),
                          title="=== [MM1] Top dataset interaction terms (BH-FDR) ===", max_rows=25)
-            print(f"[MM1] wrote: {out_path}")
+            logger.info(f"[MM1] wrote: {out_path}")
 
             _mm_forest_plot(coef_df, title="Dataset interaction coefficients (unshuffled vs shuffled)",
                             name="MM1_forest_dataset_interactions", h=h)
@@ -579,7 +589,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
             tost_df.to_csv(out_path, index=False)
             _print_table(tost_df.sort_values("q_fdr").head(25),
                          title="=== [MM4] TOST equivalence on dataset×yielding ===", max_rows=25)
-            print(f"[MM4] wrote: {out_path}")
+            logger.info(f"[MM4] wrote: {out_path}")
 
             if go is not None:
                 for dv in tost_df["dv"].unique():
@@ -601,11 +611,11 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
     # ------------------------------------------------------------
     # 2) Learning model: dataset × trial_index
     # ------------------------------------------------------------
-    print("\n=== [MM2] dataset × trial_index (learning) ===")
+    logger.info("\n=== [MM2] dataset × trial_index (learning) ===")
     if "trial_index" not in df.columns or df["trial_index"].isna().all():
-        print("[MM2] trial_index missing; skipping.")
+        logger.info("[MM2] trial_index missing; skipping.")
     elif not HAVE_SM:
-        print("[MM2] statsmodels not installed; skipping.")
+        logger.info("[MM2] statsmodels not installed; skipping.")
     else:
         learn_rows = []
         for dv in dvs:
@@ -620,7 +630,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
                 continue
 
             formula = f"{dv_model} ~ C(dataset) * trial_index"
-            print(f"[MM2] DV={dv} formula: {formula}")
+            logger.info(f"[MM2] DV={dv} formula: {formula}")
             res = _mm_fit_mixedlm(formula, dfit, group_col="participant_id", re_formula="1 + trial_index")
             if res is None:
                 continue
@@ -644,16 +654,16 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
             learn_df["q_fdr"] = _mm_bh_fdr(learn_df["p"].to_numpy(dtype=float))
             out_path = os.path.join(OUTPUT_ROOT, "MM2_mixedlm_datasetXtrial_terms.csv")
             learn_df.to_csv(out_path, index=False)
-            _print_table(learn_df.sort_values("q_fdr").head(25), title="=== [MM2] dataset×trial_index terms (BH-FDR) ===", max_rows=25)
-            print(f"[MM2] wrote: {out_path}")
+            _print_table(learn_df.sort_values("q_fdr").head(25), title="=== [MM2] dataset×trial_index terms (BH-FDR) ===", max_rows=25)  # noqa:E501
+            logger.info(f"[MM2] wrote: {out_path}")
             _mm_forest_plot(learn_df, title="Dataset × trial_index interaction", name="MM2_forest_dataset_trial", h=h)
 
     # ------------------------------------------------------------
     # 3) Sequential effects: DV_t ~ lag1 + switch + dataset interactions
     # ------------------------------------------------------------
-    print("\n=== [MM3] Sequential effects (lag/switch) ===")
+    logger.info("\n=== [MM3] Sequential effects (lag/switch) ===")
     if not HAVE_SM:
-        print("[MM3] statsmodels not installed; skipping.")
+        logger.info("[MM3] statsmodels not installed; skipping.")
     else:
         seq_rows = []
         for dv in dvs:
@@ -690,7 +700,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
                     rhs.append(f"C({f})" if f in ["prev_camera", "prev_distPed"] else f)
 
             formula = f"{dv_model} ~ " + " + ".join(rhs)
-            print(f"[MM3] DV={dv} formula: {formula}")
+            logger.info(f"[MM3] DV={dv} formula: {formula}")
             res = _mm_fit_mixedlm(formula, sdf, group_col="participant_id", re_formula="1")
             if res is None:
                 continue
@@ -714,11 +724,11 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
             seq_df.to_csv(out_path, index=False)
             _print_table(seq_df.sort_values("q_fdr").head(25),
                          title="=== [MM3] Sequential dataset interactions (BH-FDR) ===", max_rows=25)
-            print(f"[MM3] wrote: {out_path}")
+            logger.info(f"[MM3] wrote: {out_path}")
             _mm_forest_plot(seq_df, title="Sequential dataset interactions (lag/switch)",
                             name="MM3_forest_sequential", h=h)
 
-    print(f"\n[MM] Done. Plots saved to: {_get_output_dir_for_logs()}")
+    logger.info(f"\n[MM] Done. Plots saved to: {_get_output_dir_for_logs()}")
 
     # -------------------------------------------------------------------
     # C: Between-subject dataset balance + sensitivity analyses
@@ -758,7 +768,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
                     part_E_for_C = None
 
         if merged_for_C is None or merged_for_C.empty:
-            print("[C] Between-subject block: could not load merged trial table from disk; skipping.")
+            logger.warning("[C] Between-subject block: could not load merged trial table from disk; skipping.")
         else:
             _between_subject_balance_and_sensitivity(
                 merged=merged_for_C,
@@ -767,7 +777,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
                 h=h,
             )
     except Exception as e:
-        print(f"[C] Between-subject balance/sensitivity block failed (non-fatal): {e}")
+        logger.error(f"[C] Between-subject balance/sensitivity block failed (non-fatal): {e}")
 
     # Optional: open a single index page linking all plots
     # Set CSU_OPEN_PLOT_INDEX=1 if you want this behaviour

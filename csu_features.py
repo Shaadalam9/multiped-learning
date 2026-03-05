@@ -23,6 +23,8 @@ import pandas as pd
 import plotly.express as px  # noqa:F401
 import plotly.graph_objects as go  # noqa:F401
 
+from custom_logger import CustomLogger
+
 from helper import HMD_helper
 
 from utils.HMD_helper import HMD_yaw
@@ -45,6 +47,7 @@ from csu_core import (
 from csu_yaw_constants import _YAW_CANDIDATES, _QUAT_REGEX, _QUAT_LIST_COL_PAT
 
 _HMD_YAW = HMD_yaw() if HMD_yaw is not None else None
+logger = CustomLogger(__name__)  # use custom logger
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +71,7 @@ def load_trial_q123_from_responses(responses_root: str, dataset_label: str,
 
     records = []
     if not os.path.isdir(responses_root):
-        print(f"[Q123] responses_root not found: {responses_root}")
+        logger.warning(f"[Q123] responses_root not found: {responses_root}")
         return pd.DataFrame()
 
     part_dirs = [
@@ -724,16 +727,11 @@ def _extract_yaw_features_from_timeseries(raw_df: pd.DataFrame, video_id: str, p
     return rec
 
 
-def compute_yaw_features_dataset(
-    data_folder: str,
-    mapping_df: pd.DataFrame,
-    dataset_label: str,
-    out_csv: Optional[str] = None,
-    time_col: str = "Timestamp",
-    trigger_col: str = "TriggerValueRight",
-) -> pd.DataFrame:
+def compute_yaw_features_dataset(data_folder: str, mapping_df: pd.DataFrame, dataset_label: str,
+                                 out_csv: Optional[str] = None, time_col: str = "Timestamp",
+                                 trigger_col: str = "TriggerValueRight") -> pd.DataFrame:
     if not os.path.isdir(data_folder):
-        print(f"[YAW] data_folder not found: {data_folder}")
+        logger.warning(f"[YAW] data_folder not found: {data_folder}")
         return pd.DataFrame()
 
     mapping_ids = set(mapping_df["video_id"].astype(str).tolist()) if "video_id" in mapping_df.columns else set()
@@ -825,7 +823,7 @@ def compute_yaw_features_dataset(
         try:
             out.to_csv(out_csv, index=False)
         except Exception as e:
-            print(f"[YAW] Could not write {out_csv}: {e}")
+            logger.error(f"[YAW] Could not write {out_csv}: {e}")
     return out
 
 
@@ -852,7 +850,7 @@ def summarize_and_plot_yaw_results(
     - yaw_mean_by_dataset, yaw_sd_by_dataset, yaw_forward_frac_by_dataset (+ any extra yaw_* metrics if present)
     """
     if yaw_df is None or len(yaw_df) == 0:
-        print("[YAW] No yaw rows; skipping yaw summaries/plots.")
+        logger.info("[YAW] No yaw rows; skipping yaw summaries/plots.")
         return
 
     # Ensure output directory exists
@@ -914,10 +912,10 @@ def summarize_and_plot_yaw_results(
         match_rate = float(d[factors[1:]].notna().any(axis=1).mean()) if len(factors) > 1 else 1.0
         if match_rate < 0.95:
             bad = d.loc[d[factors[1:]].isna().all(axis=1), "video_id"].astype(str).unique()[:10]
-            print(f"[YAW] Warning: mapping merge matched only {match_rate*100:.1f}% of yaw rows. Example unmapped video_id: {list(bad)}")  # noqa: E501
+            logger.warning(f"[YAW] Warning: mapping merge matched only {match_rate*100:.1f}% of yaw rows. Example unmapped video_id: {list(bad)}")  # noqa: E501
         d = d.drop(columns=["_video_norm"], errors="ignore")
     else:
-        print("[YAW] Warning: cannot merge mapping factors (missing video_id or mapping). Context plots may be reduced.")  # noqa: E501
+        logger.warning("[YAW] Warning: cannot merge mapping factors (missing video_id or mapping). Context plots may be reduced.")  # noqa: E501
 
     # Coerce factor columns (nice ordering/labels)
     for c in ["yielding", "eHMIOn", "camera"]:
@@ -944,7 +942,7 @@ def summarize_and_plot_yaw_results(
             metric_cols.append(c)
 
     if len(metric_cols) == 0:
-        print("[YAW] No known yaw metrics found; skipping yaw summaries/plots.")
+        logger.info("[YAW] No known yaw metrics found; skipping yaw summaries/plots.")
         return
 
     # ---------------------------------------------------------------------
@@ -965,7 +963,7 @@ def summarize_and_plot_yaw_results(
     # Write participant-level table (context+camera)
     ctx_csv = os.path.join(out_root, "yaw_summary_by_context.csv")
     by_p_cam.to_csv(ctx_csv, index=False)
-    print(f"[YAW] wrote: {ctx_csv}")
+    logger.info(f"[YAW] wrote: {ctx_csv}")
 
     # 2b) participant means by dataset (all trials)
     by_p_ds = (
@@ -975,7 +973,7 @@ def summarize_and_plot_yaw_results(
     )
     ds_csv = os.path.join(out_root, "yaw_summary_by_dataset.csv")
     by_p_ds.to_csv(ds_csv, index=False)
-    print(f"[YAW] wrote: {ds_csv}")
+    logger.info(f"[YAW] wrote: {ds_csv}")
 
     # ---------------------------------------------------------------------
     # 3) Group-level summaries across participants (mean ± SEM)
@@ -1000,13 +998,13 @@ def summarize_and_plot_yaw_results(
     grp_cam = _group_summary(by_p_cam, group_cols_cam_g)
     grp_cam_csv = os.path.join(out_root, "yaw_summary_by_context_group.csv")
     grp_cam.to_csv(grp_cam_csv, index=False)
-    print(f"[YAW] wrote: {grp_cam_csv}")
+    logger.info(f"[YAW] wrote: {grp_cam_csv}")
 
     grp_cam_txt = os.path.join(out_root, "yaw_summary_by_context.txt")
     with open(grp_cam_txt, "w") as f:
         f.write(grp_cam.to_string(index=False))
         f.write("\n")
-    print(f"[YAW] wrote: {grp_cam_txt}")
+    logger.info(f"[YAW] wrote: {grp_cam_txt}")
 
     # 3b) dataset group
     grp_ds = _group_summary(by_p_ds, ["dataset"])
@@ -1017,14 +1015,11 @@ def summarize_and_plot_yaw_results(
     with open(grp_ds_txt, "w") as f:
         f.write(grp_ds.to_string(index=False))
         f.write("\n")
-    print(f"[YAW] wrote: {grp_ds_txt}")
+    logger.info(f"[YAW] wrote: {grp_ds_txt}")
 
     # ---------------------------------------------------------------------
     # 4) Plots
     # ---------------------------------------------------------------------
-    if px is None:
-        print("[YAW] plotly not available; skipping yaw plots.")
-        return
 
     # Helper label for yielding/eHMI contexts (4 contexts)
     def _ctx_label(y, e) -> str:
@@ -1099,7 +1094,7 @@ def summarize_and_plot_yaw_results(
         fig.update_xaxes(title_text="Context (yielding/eHMI)")
         fig.update_layout(legend_title_text="dataset", margin=dict(t=70, l=70, r=20, b=70), height=550)
 
-        print("[YAW] plotting yaw_forward_fraction_by_context")
+        logger.info("[YAW] plotting yaw_forward_fraction_by_context")
         _save_plot(h, fig, "yaw_forward_fraction_by_context", out_root=out_root)
 
         # 4b) Optional: Forward-looking fraction by context WITH camera (8 contexts)
@@ -1148,7 +1143,7 @@ def summarize_and_plot_yaw_results(
             fig2.update_xaxes(title_text="Context (camera | yielding/eHMI)", tickangle=-25)
             fig2.update_layout(legend_title_text="dataset", margin=dict(t=70, l=70, r=20, b=110), height=620)
 
-            print("[YAW] plotting yaw_forward_fraction_by_context_camera (8 contexts)")
+            logger.info("[YAW] plotting yaw_forward_fraction_by_context_camera (8 contexts)")
             _save_plot(h, fig2, "yaw_forward_fraction_by_context_camera", out_root=out_root)
 
     # 4c) Dataset-level scatter/strip plots for common yaw metrics
@@ -1446,7 +1441,7 @@ def compute_trigger_features_dataset(
     It will only use files that include both `time_col` and `trigger_col`.
     """
     if not os.path.isdir(data_folder):
-        print(f"[trigger] data_folder not found: {data_folder}")
+        logger.warning(f"[trigger] data_folder not found: {data_folder}")
         return pd.DataFrame()
 
     md = mapping_df.copy()
@@ -1531,7 +1526,7 @@ def compute_trigger_features_dataset(
 
     out = pd.DataFrame(rows)
     if out.empty:
-        print(f"[trigger] No usable time-series CSVs found for {dataset_label} under {data_folder}")
+        logger.warning(f"[trigger] No usable time-series CSVs found for {dataset_label} under {data_folder}")
         return out
 
     # Merge design factors (yielding/eHMI/camera/distPed etc.)
@@ -1544,7 +1539,7 @@ def compute_trigger_features_dataset(
     try:
         out.to_csv(out_csv, index=False)
     except Exception as e:
-        print(f"[trigger] Could not write {out_csv}: {e}")
+        logger.error(f"[trigger] Could not write {out_csv}: {e}")
 
     return out
 
