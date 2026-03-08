@@ -83,7 +83,6 @@ INTAKE_COLUMNS_CATEGORICAL = [
     "Do you consent to participate in this study as described in the information provided above?",
     "Have you read and understood the above instructions?",
     "What is your gender?",
-    "Are you wearing any seeing aids during the experiments?",
     "Do you have problems with hearing?",
     "How often in the last month have you experienced virtual reality?",
     "I am comfortable with walking in areas with dense traffic.",
@@ -142,14 +141,14 @@ PLOT_METRICS = [
     "yaw_speed_pre_press_mean_1s",
     "lag_turn_to_press_s_15",
     "yaw_pre_press_delta_1s",
-    "yaw_pre_press_delta_1s",
     "yaw_speed_pre_press_mean_2s",
     "yaw_pre_press_mean_2s",
     "yaw_pre_press_mean_2to1s",
     "yaw_around_release_mean_pm1s",
     "xcorr_yawspd_dtrig_max_r",
     "xcorr_yawspd_dtrig_lag_s",
-    "yaw_pre_release_delta_1s",]
+    "yaw_pre_release_delta_1s",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +161,6 @@ INTAKE_COLUMNS_TO_EXTRACT = [
     "Do you consent to participate in this study as described in the information provided above?",
     "Have you read and understood the above instructions?",
     "What is your gender?",
-    "Are you wearing any seeing aids during the experiments?",
     "Do you have problems with hearing?",
     "How often in the last month have you experienced virtual reality?",
     "I am comfortable with walking in areas with dense traffic.",
@@ -1397,11 +1395,22 @@ def _summarize_demographics_from_intake(dataset: str, intake_path: str, features
     expected_trials = np.nan
     completeness = None
     if features_df is not None and (not features_df.empty) and ("participant_id" in features_df.columns) and ("video_id" in features_df.columns):  # noqa: E501
-        expected_trials = int(mapping_df["video_id"].nunique()) if mapping_df is not None and "video_id" in mapping_df.columns else int(features_df["video_id"].nunique())  # noqa: E501
-        per = features_df.groupby("participant_id")["video_id"].nunique().reset_index()
+        feat = features_df.copy()
+        if "trial_index" in feat.columns:
+            ti = pd.to_numeric(feat["trial_index"], errors="coerce")
+            if ti.notna().any():
+                # Main trials only: by convention indices < 2 are practice.
+                feat = feat.loc[ti >= 2].copy()
+
+        if mapping_df is not None and "video_id" in mapping_df.columns:
+            expected_trials = int(feat["video_id"].nunique()) if not feat.empty else int(mapping_df["video_id"].nunique())  # noqa: E501
+        else:
+            expected_trials = int(feat["video_id"].nunique())
+
+        per = feat.groupby("participant_id")["video_id"].nunique().reset_index()
         per.columns = ["participant_id", "n_trials"]
         n_feat_p = int(per.shape[0])
-        n_complete = int((per["n_trials"] >= expected_trials).sum())
+        n_complete = int((per["n_trials"] >= expected_trials).sum()) if not np.isnan(expected_trials) else np.nan
         completeness = per
 
     # Print (logs)
@@ -2657,8 +2666,7 @@ def main() -> None:
         outcome_defs = {}
         # earlier release in yielding
         if "latency_first_release_s" in base_trials.columns and "yielding" in base_trials.columns:
-            outcome_defs["release_latency_yielding_mean"] = ("latency_first_release_s",
-                                                             "press_release_hysteresis", {"yielding": 1})
+            outcome_defs["release_latency_yielding_mean"] = ("latency_first_release_s", {"yielding": 1})
         # yaw volatility proxy
         yaw_vol_col = _pick_col(base_trials, ["yaw_speed_p95", "yaw_speed_mean", "yaw_sd", "yaw_iqr"])
         if yaw_vol_col is not None:

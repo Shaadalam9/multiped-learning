@@ -13,18 +13,20 @@ from custom_logger import CustomLogger
 import re
 import numpy as np
 from scipy.stats import ttest_rel, ttest_ind
+
 # This project is sometimes run with different repository layouts:
 # some copies keep these modules under ``utils/`` while others keep them at the
 # project root. Support both.
 try:
     from utils.HMD_helper import HMD_yaw  # type: ignore
 except Exception:  # pragma: no cover
-    from utils.HMD_helper import HMD_yaw  # type: ignore
+    from HMD_helper import HMD_yaw  # type: ignore
 
 try:
     from utils.tools import Tools  # type: ignore
 except Exception:  # pragma: no cover
-    from utils.tools import Tools  # type: ignore
+    from tools import Tools  # type: ignore
+
 from tqdm import tqdm
 from datetime import datetime
 import ast
@@ -32,9 +34,23 @@ from typing import Optional
 
 import math
 
+logger = CustomLogger(__name__)  # use custom logger
+
+HMD_class = HMD_yaw()
+extra_class = Tools()
+
+# Consts
+SAVE_PNG = True
+SAVE_EPS = True
+output = common.get_configs("output")
+plotly_template = common.get_configs("plotly_template")
+font_size = common.get_configs("font_size")
+font_family = common.get_configs("font_family")
+
 # ---------------------------------------------------------------------------
 # Config helpers (support both legacy single-dataset keys and new shuffled/unshuffled keys)
 # ---------------------------------------------------------------------------
+
 
 def _safe_get_config(key: str, default=None):
     """Return common.get_configs(key) if available, else default."""
@@ -68,21 +84,6 @@ def _resolve_data_folder(dataset: Optional[str] = None) -> str:
         return v
     # Last resort: keep old behavior but make it explicit.
     return ""
-
-
-
-logger = CustomLogger(__name__)  # use custom logger
-
-HMD_class = HMD_yaw()
-extra_class = Tools()
-
-# Consts
-SAVE_PNG = True
-SAVE_EPS = True
-output = common.get_configs("output")
-plotly_template = common.get_configs("plotly_template")
-font_size = common.get_configs("font_size")
-font_family = common.get_configs("font_family")
 
 
 class HMD_helper:
@@ -429,7 +430,7 @@ class HMD_helper:
                     showarrow = getattr(a, 'showarrow', None)
 
                     # Heuristic: subplot titles are paper referenced, arrowless annotations at y around 1.
-                    if (xref == 'paper' and yref == 'paper' and showarrow is False and isinstance(y, (int, float)) and y >= 0.98):
+                    if (xref == 'paper' and yref == 'paper' and showarrow is False and isinstance(y, (int, float)) and y >= 0.98):  # noqa: E501
                         continue
                     kept.append(a)
                 fig.update_layout(annotations=kept)

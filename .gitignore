@@ -216,6 +216,7 @@ __marimo__/
 *.log
 *.out
 logs.txt
+output.txt
 
 # Instance specific files
 /config

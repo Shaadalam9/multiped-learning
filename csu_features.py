@@ -24,10 +24,13 @@ import plotly.express as px  # noqa:F401
 import plotly.graph_objects as go  # noqa:F401
 
 from custom_logger import CustomLogger
-
 from helper import HMD_helper
 
-from utils.HMD_helper import HMD_yaw
+try:
+    from utils.HMD_helper import HMD_yaw  # type: ignore
+except Exception:  # pragma: no cover
+    from HMD_helper import HMD_yaw  # type: ignore
+
 # Import helpers (kept as names to avoid editing the original function bodies)
 from csu_core import (
     _choose_trial_file,
@@ -41,7 +44,7 @@ from csu_core import (
     _zscore,
 )
 
-# Shared yaw/quaternion column heuristics.
+# Shared yaw or quaternion column heuristics.
 # Kept in a standalone module so both `csu_features` and `csu_core` can use them
 # without creating circular imports.
 from csu_yaw_constants import _YAW_CANDIDATES, _QUAT_REGEX, _QUAT_LIST_COL_PAT
@@ -906,12 +909,37 @@ def summarize_and_plot_yaw_results(
         m["_video_norm"] = m["video_id"].map(_norm_vid)
 
         # Deduplicate mapping on _video_norm (keep first)
-        m = m.drop_duplicates(subset=["_video_norm"], keep="first").drop(columns=["video_id"])
+        m = m.drop_duplicates(subset=["_video_norm"], keep="first")
 
-        d = d.merge(m, on="_video_norm", how="left")
-        match_rate = float(d[factors[1:]].notna().any(axis=1).mean()) if len(factors) > 1 else 1.0
+        merge_cols = ["_video_norm"]
+        factor_cols = []
+        for c in factors:
+            if c == "video_id":
+                continue
+            if c not in d.columns:
+                merge_cols.append(c)
+                factor_cols.append(c)
+            else:
+                fill_col = f"{c}__mapfill"
+                m = m.rename(columns={c: fill_col})
+                merge_cols.append(fill_col)
+                factor_cols.append(c)
+
+        d = d.merge(m[merge_cols], on="_video_norm", how="left")
+
+        for c in factors:
+            if c == "video_id":
+                continue
+            fill_col = f"{c}__mapfill"
+            if fill_col in d.columns:
+                d[c] = d[c] if c in d.columns else np.nan
+                d[c] = d[c].where(d[c].notna(), d[fill_col])
+                d = d.drop(columns=[fill_col], errors="ignore")
+
+        present_factor_cols = [c for c in ["yielding", "eHMIOn", "camera", "distPed"] if c in d.columns]
+        match_rate = float(d[present_factor_cols].notna().any(axis=1).mean()) if present_factor_cols else 1.0
         if match_rate < 0.95:
-            bad = d.loc[d[factors[1:]].isna().all(axis=1), "video_id"].astype(str).unique()[:10]
+            bad = d.loc[d[present_factor_cols].isna().all(axis=1), "video_id"].astype(str).unique()[:10] if present_factor_cols else []  # noqa: E501
             logger.warning(f"[YAW] Warning: mapping merge matched only {match_rate*100:.1f}% of yaw rows. Example unmapped video_id: {list(bad)}")  # noqa: E501
         d = d.drop(columns=["_video_norm"], errors="ignore")
     else:
