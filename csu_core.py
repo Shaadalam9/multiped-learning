@@ -46,99 +46,280 @@ HAVE_SM = True
 logger = CustomLogger(__name__)  # use custom logger
 
 
-# Consistent shuffled/unshuffled palette used across all figures.
-DATASET_COLOR_MAP = {
-    "shuffled": "#1f77b4",
-    "unshuffled": "#ff7f0e",
-}
+# Consistent dataset labels and colours used across all exported figures.
 DATASET_LABEL_MAP = {
     "shuffled": "Randomised",
     "unshuffled": "Fixed order",
+    "fixed-order": "Fixed order",
+    "fixed order": "Fixed order",
+    "randomized": "Randomised",
+    "randomised": "Randomised",
 }
-DATASET_CATEGORY_ORDER = {"dataset": ["shuffled", "unshuffled"]}
+DATASET_COLOUR_MAP = {
+    "shuffled": "#1f77b4",
+    "unshuffled": "#ff7f0e",
+    "Randomised": "#1f77b4",
+    "Fixed order": "#ff7f0e",
+}
+# Compatibility alias for earlier patches that used American spelling.
+DATASET_COLOR_MAP = DATASET_COLOUR_MAP
 
 
-def _rgba_from_hex(hex_color: str, alpha: float) -> str:
-    """Convert '#RRGGBB' to 'rgba(r,g,b,a)'."""
-    hc = str(hex_color).strip().lstrip("#")
-    if len(hc) != 6:
-        return f"rgba(0,0,0,{alpha})"
-    r = int(hc[0:2], 16)
-    g = int(hc[2:4], 16)
-    b = int(hc[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
+def _normalise_dataset_token(value: Any) -> Any:
+    if value is None:
+        return value
+    s = str(value)
+    key = s.strip().lower().replace("_", " ")
+    if key in DATASET_LABEL_MAP:
+        return DATASET_LABEL_MAP[key]
+    return value
 
 
-def _dataset_key_from_trace_label(label: Optional[str]) -> Optional[str]:
-    """Infer dataset key from a Plotly trace or legend label."""
-    if label is None:
-        return None
-    s = str(label).strip().lower()
-    if ("unshuffled" in s) or ("fixed-order" in s) or ("fixed order" in s):
-        return "unshuffled"
-    if ("shuffled" in s) or ("randomised" in s) or ("randomized" in s):
-        return "shuffled"
-    return None
+def _rgba_from_hex(hex_colour: str, alpha: float) -> str:
+    c = str(hex_colour).lstrip('#')
+    if len(c) != 6:
+        return f'rgba(0,0,0,{alpha})'
+    r = int(c[0:2], 16)
+    g = int(c[2:4], 16)
+    b = int(c[4:6], 16)
+    return f'rgba({r},{g},{b},{alpha})'
 
 
-def _apply_dataset_palette(fig) -> None:
-    """Force a consistent shuffled/unshuffled palette on Plotly traces."""
-    if fig is None or not hasattr(fig, "data"):
-        return
+def _humanise_label(value: Any) -> Any:
+    """Convert raw column names into publication-ready British English labels."""
+    if value is None:
+        return value
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if not s:
+        return s
 
-    simple_labels = {"shuffled", "unshuffled", "Randomised", "Randomized", "Fixed-order", "Fixed order"}
+    # dataset names first
+    norm = _normalise_dataset_token(s)
+    if isinstance(norm, str) and norm != s:
+        return norm
 
-    for tr in fig.data:
-        ds_key = None
-        for candidate in [getattr(tr, "name", None), getattr(tr, "legendgroup", None)]:
-            ds_key = _dataset_key_from_trace_label(candidate)
-            if ds_key is not None:
-                break
-        if ds_key is None:
-            continue
+    direct = {
+        'dataset': 'Dataset',
+        'participant_id': 'Participant ID',
+        'video_id': 'Video ID',
+        'condition_name': 'Condition',
+        'trial_index': 'Trial number',
+        'trial_pos_norm': 'Normalised trial position',
+        'bin_center': 'Normalised trial position',
+        'y_mean': 'Mean value',
+        'sem': 'Standard error',
+        'q1': 'Q1 rating',
+        'q2': 'Q2 rating',
+        'q3': 'Q3 rating',
+        'Q1': 'Q1 rating',
+        'Q2': 'Q2 rating',
+        'Q3': 'Q3 rating',
+        'trigger_mean': 'Mean unsafety',
+        'avg_trigger': 'Mean unsafety',
+        'mean_trigger': 'Mean unsafety',
+        'frac_time_unsafe': 'Fraction of trial time in unsafe zone',
+        'unsafe_time_frac': 'Fraction of trial time in unsafe zone',
+        'frac_unsafe': 'Fraction of trial time in unsafe zone',
+        'dtrigger_sd': 'Unsafety volatility',
+        'trigger_sd': 'Unsafety volatility',
+        'volatility': 'Unsafety volatility',
+        'n_transitions': 'Number of unsafety transitions',
+        'transitions': 'Number of unsafety transitions',
+        'num_transitions': 'Number of unsafety transitions',
+        'latency_first_press_s': 'Latency to first button press (s)',
+        'latency_first_release_s': 'Latency to first button release (s)',
+        'press_release_hysteresis_s': 'Interval from first press to first release (s)',
+        'yielding': 'Yielding',
+        'eHMIOn': 'eHMI on',
+        'prev_yielding': 'Previous trial yielding',
+        'prev_eHMIOn': 'Previous trial eHMI on',
+        'prev_camera': 'Previous trial camera condition',
+        'prev_distPed': 'Previous trial pedestrian distance',
+        'distPed': 'Pedestrian distance',
+        'camera': 'Camera condition',
+        'yaw_abs_mean': 'Mean absolute head yaw (deg)',
+        'yaw_forward_frac_15': 'Fraction of time looking forwards',
+        'yaw_sd': 'Standard deviation of head yaw (deg)',
+        'yaw_entropy': 'Head yaw entropy',
+        'yaw_speed_mean': 'Mean head yaw speed (deg/s)',
+        'head_turn_count_15': 'Number of head turns',
+        'head_turn_dwell_mean_s_15': 'Mean head turn dwell time (s)',
+        'yaw_speed_pre_press_mean_1s': 'Mean head yaw speed before button press (deg/s)',
+        'lag_turn_to_press_s_15': 'Lag from head turn to button press (s)',
+        'n_trials_main': 'Number of main trials',
+        'completion_frac': 'Completion fraction',
+    }
+    if s in direct:
+        return direct[s]
 
-        color = DATASET_COLOR_MAP.get(ds_key)
-        label = DATASET_LABEL_MAP.get(ds_key)
-        if color is None:
-            continue
+    # compound metric names
+    prefixes = [
+        ('carryover_prev_yielding_', 'Carryover effect of previous yielding on {}'),
+        ('carryover_prev_eHMIOn_', 'Carryover effect of previous eHMI on on {}'),
+        ('carryover_prev_camera_', 'Carryover effect of previous camera condition on {}'),
+        ('carryover_prev_distPed_', 'Carryover effect of previous pedestrian distance on {}'),
+        ('drift_late_minus_early_', 'Late minus early change in {}'),
+        ('slope_', 'Linear slope of {} over trial position'),
+        ('post_break_reset_', 'Post break reset in {}'),
+        ('break_reset_matched_', 'Break matched change in {}'),
+        ('switch_cost_', 'Switch cost in {}'),
+        ('missing_frac_', 'Missing fraction for {}'),
+        ('baseline_mean_', 'Baseline mean of {}'),
+        ('curve_time_on_task_', '{} over trial position'),
+    ]
+    for prefix, template in prefixes:
+        if s.startswith(prefix):
+            rest = s[len(prefix):]
+            return template.format(_humanise_label(rest).lower())
 
-        try:
-            if getattr(tr, "name", None) in simple_labels:
-                tr.name = label
-        except Exception:
-            pass
-        try:
-            if getattr(tr, "legendgroup", None) in simple_labels:
-                tr.legendgroup = label
-        except Exception:
-            pass
+    # general clean-up
+    pretty = s.replace('_', ' ')
+    pretty = re.sub(r'\bnormalized\b', 'normalised', pretty, flags=re.IGNORECASE)
+    pretty = re.sub(r'\bunshuffled\b', 'Fixed order', pretty, flags=re.IGNORECASE)
+    pretty = re.sub(r'\bshuffled\b', 'Randomised', pretty, flags=re.IGNORECASE)
+    pretty = re.sub(r'\s+', ' ', pretty).strip()
+    if pretty.islower():
+        pretty = pretty.capitalize()
+    return pretty
 
-        try:
-            if hasattr(tr, "line") and tr.line is not None:
-                tr.line.color = color
-        except Exception:
-            pass
-        try:
-            if hasattr(tr, "marker") and tr.marker is not None:
-                tr.marker.color = color
-                if getattr(tr.marker, "line", None) is not None and getattr(tr.marker.line, "color", None) is None:
-                    tr.marker.line.color = color
-        except Exception:
-            pass
-        try:
-            if hasattr(tr, "fillcolor"):
-                tr.fillcolor = _rgba_from_hex(color, 0.28)
-        except Exception:
-            pass
 
+def _sanitise_axis_like(obj: Any) -> None:
     try:
-        fig.update_layout(
-            colorway=[DATASET_COLOR_MAP["shuffled"], DATASET_COLOR_MAP["unshuffled"]],
-            legend_title_text="Dataset",
-        )
+        title = getattr(obj, 'title', None)
+        if title is not None:
+            text = getattr(title, 'text', None)
+            if isinstance(text, str) and text:
+                title.text = _humanise_label(text)
+    except Exception:
+        pass
+    try:
+        ticktext = getattr(obj, 'ticktext', None)
+        if ticktext:
+            obj.ticktext = tuple(_humanise_label(x) for x in ticktext)
     except Exception:
         pass
 
+
+def _split_single_dataset_violin(fig: Any) -> None:
+    """Turn a single dataset violin/box trace into one trace per dataset so colours can differ."""
+    try:
+        if len(fig.data) != 1:
+            return
+        tr = fig.data[0]
+        if getattr(tr, 'type', None) not in {'violin', 'box'}:
+            return
+        x = list(getattr(tr, 'x', []) or [])
+        y = list(getattr(tr, 'y', []) or [])
+        if not x or len(x) != len(y):
+            return
+        x_norm = [_normalise_dataset_token(v) for v in x]
+        wanted = ['Randomised', 'Fixed order']
+        if not any(v in wanted for v in x_norm):
+            return
+        new_traces = []
+
+        for ds in wanted:
+            idx = [i for i, v in enumerate(x_norm) if v == ds]
+            if not idx:
+                continue
+            xs = [ds] * len(idx)
+            ys = [y[i] for i in idx]
+            colour = DATASET_COLOUR_MAP.get(ds)
+            common = dict(
+                x=xs,
+                y=ys,
+                name=ds,
+                legendgroup=ds,
+                box_visible=bool(getattr(tr, 'box', None) and getattr(tr.box, 'visible', False)) or True,
+                meanline_visible=bool(getattr(tr, 'meanline', None) and getattr(tr.meanline, 'visible', False)),
+                points=getattr(tr, 'points', 'outliers'),
+                jitter=getattr(tr, 'jitter', None),
+                pointpos=getattr(tr, 'pointpos', None),
+                opacity=getattr(tr, 'opacity', None) or 0.75,
+                showlegend=True,
+            )
+            if getattr(tr, 'type', None) == 'violin':
+                nt = go.Violin(**common)
+                nt.fillcolor = _rgba_from_hex(colour, 0.35)  # type: ignore
+            else:
+                nt = go.Box(**common)
+            nt.line = dict(color=colour)
+            nt.marker = dict(color=colour)
+            new_traces.append(nt)
+        if new_traces:
+            fig.data = tuple(new_traces)
+    except Exception:
+        return
+
+
+def _sanitise_figure_for_export(fig: Any) -> Any:
+    if fig is None:
+        return fig
+    try:
+        _split_single_dataset_violin(fig)
+    except Exception:
+        pass
+    try:
+        for tr in fig.data:
+            try:
+                if hasattr(tr, 'name') and isinstance(tr.name, str):
+                    tr.name = _humanise_label(tr.name)
+                if hasattr(tr, 'legendgroup') and isinstance(tr.legendgroup, str):
+                    tr.legendgroup = _humanise_label(tr.legendgroup)
+                ds_key = None
+                for cand in [getattr(tr, 'name', None), getattr(tr, 'legendgroup', None)]:
+                    if cand in DATASET_COLOUR_MAP:
+                        ds_key = cand
+                        break
+                if ds_key is not None:
+                    colour = DATASET_COLOUR_MAP[ds_key]
+                    if hasattr(tr, 'line'):
+                        tr.line.color = colour
+                    if hasattr(tr, 'marker'):
+                        tr.marker.color = colour
+                    if hasattr(tr, 'fillcolor'):
+                        tr.fillcolor = _rgba_from_hex(colour, 0.20)
+                if hasattr(tr, 'x') and tr.x is not None:
+                    tr.x = tuple(_normalise_dataset_token(v) if isinstance(v, str) else v for v in tr.x)
+                if hasattr(tr, 'y') and tr.y is not None and getattr(tr, 'type', None) == 'bar':
+                    tr.y = tuple(_normalise_dataset_token(v) if isinstance(v, str) else v for v in tr.y)
+                if hasattr(tr, 'hovertemplate') and isinstance(tr.hovertemplate, str):
+                    ht = tr.hovertemplate.replace('_', ' ')
+                    ht = ht.replace('unshuffled', 'Fixed order').replace('shuffled', 'Randomised')
+                    tr.hovertemplate = ht
+            except Exception:
+                pass
+        # layout titles
+        try:
+            if getattr(fig.layout, 'title', None) and isinstance(fig.layout.title.text, str):
+                fig.layout.title.text = _humanise_label(fig.layout.title.text)
+        except Exception:
+            pass
+        for k in dir(fig.layout):
+            if k.startswith('xaxis') or k.startswith('yaxis'):
+                try:
+                    _sanitise_axis_like(getattr(fig.layout, k))
+                except Exception:
+                    pass
+        try:
+            if getattr(fig.layout, 'legend', None) and getattr(fig.layout.legend, 'title', None):
+                txt = getattr(fig.layout.legend.title, 'text', None)
+                if isinstance(txt, str):
+                    fig.layout.legend.title.text = _humanise_label(txt)
+        except Exception:
+            pass
+        try:
+            anns = getattr(fig.layout, 'annotations', None) or []
+            for ann in anns:
+                if hasattr(ann, 'text') and isinstance(ann.text, str):
+                    ann.text = _humanise_label(ann.text)
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return fig
 
 
 # -----------------------
@@ -793,6 +974,7 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
     global _KALEIDO_WARNED
     if fig is None:
         return
+    fig = _sanitise_figure_for_export(fig)
 
     # env var override (handy when you do not want to touch call sites)
     env_open = os.environ.get('CSU_OPEN_BROWSER', None)

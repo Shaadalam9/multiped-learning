@@ -42,6 +42,9 @@ from csu_core import (  # noqa: F401
     _safe_corr,
     _safe_two_sample_test,
     _save_plot,
+    _humanise_label,
+    DATASET_COLOR_MAP,
+    DATASET_LABEL_MAP,
     _trial_num_display,
     common,
     compare_participant_metrics,
@@ -498,7 +501,7 @@ def _within_participant_reliability(df: pd.DataFrame, outcomes: List[str]) -> pd
                     continue
                 r, p = pearsonr(g["half_A"], g["half_B"])
                 n = int(len(g))
-                ci_lo, ci_hi = _fisher_ci(r, n)
+                ci_lo, ci_hi = _fisher_ci(r, n)  # pyright: ignore[reportArgumentType]
                 r_sb = (2.0 * r / (1.0 + r)) if r > -0.999 else np.nan
                 rows.append(
                     {
@@ -521,7 +524,7 @@ def _within_participant_reliability(df: pd.DataFrame, outcomes: List[str]) -> pd
                 if len(g1) >= 4 and len(g2) >= 4:
                     r1, _ = pearsonr(g1["half_A"], g1["half_B"])
                     r2, _ = pearsonr(g2["half_A"], g2["half_B"])
-                    z, pz = _compare_independent_corr(r1, len(g1), r2, len(g2))
+                    z, pz = _compare_independent_corr(r1, len(g1), r2, len(g2))  # pyright: ignore[reportArgumentType]
                     rows.append(
                         {
                             "outcome": outcome,
@@ -612,10 +615,10 @@ def _infer_break_end_positions(n_trials: int) -> List[int]:
                 ser = pd.Series(np.arange(len(g)))
             else:
                 ser = pd.to_numeric(g[col], errors="coerce")
-        if ser.notna().any():
-            n_trials = int(ser.max()) + 1
+        if ser.notna().any():  # type: ignore
+            n_trials = int(ser.max()) + 1  # type: ignore
         else:
-            n_trials = int(len(ser))
+            n_trials = int(len(ser))  # type: ignore
 
     try:
         n_trials = int(n_trials)
@@ -652,7 +655,7 @@ def _participant_learning_metrics(df: pd.DataFrame, outcomes: List[str]) -> pd.D
         for col in outcomes:
             y = pd.to_numeric(g[col], errors="coerce")
             x = pd.to_numeric(g["trial_pos"], errors="coerce")
-            lr = _lin_slope(x.values, y.values)
+            lr = _lin_slope(x.values, y.values)  # pyright: ignore[reportArgumentType]
             slope = lr["slope"]
 
             # early/late drift (last third - first third)
@@ -942,7 +945,7 @@ def _participant_break_matched_metrics(
         if not break_ends:
             continue
 
-        out_row: Dict[str, float] = {"dataset": ds, "participant_id": pid}
+        out_row: Dict[str, float] = {"dataset": ds, "participant_id": pid}  # pyright: ignore[reportAssignmentType]
 
         for col in outcomes:
             if col not in g.columns:
@@ -1013,7 +1016,7 @@ def _binned_curves(df: pd.DataFrame, outcome_col: str, n_bins: int = 10) -> pd.D
     tmp = df[["dataset", "participant_id", "trial_pos_norm", outcome_col]].copy()
     tmp[outcome_col] = pd.to_numeric(tmp[outcome_col], errors="coerce")
     tmp = tmp.dropna(subset=["trial_pos_norm"])
-    tmp["bin"] = pd.cut(tmp["trial_pos_norm"], bins=np.linspace(0, 1, n_bins + 1), include_lowest=True, labels=False)
+    tmp["bin"] = pd.cut(tmp["trial_pos_norm"], bins=np.linspace(0, 1, n_bins + 1), include_lowest=True, labels=False)  # type: ignore  # noqa: E501
     # participant mean per bin
     pb = tmp.groupby(["dataset", "participant_id", "bin"], dropna=False)[outcome_col].mean().reset_index()
     # dataset mean + sem across participants
@@ -1152,13 +1155,13 @@ _NATIONALITY_MAP = {
 
 def _normalize_nationality(x) -> str:
     if x is None or (isinstance(x, float) and np.isnan(x)):
-        return np.nan
+        return np.nan  # type: ignore
     s = str(x).strip()
     if s in _NATIONALITY_MAP:
         return _NATIONALITY_MAP[s]
     s2 = s.strip()
     if not s2:
-        return np.nan
+        return np.nan  # type: ignore
     return s2[:1].upper() + s2[1:]
 
 
@@ -1545,13 +1548,13 @@ def extract_selected_questionnaire_values(
             rows_long.append(tmp)
 
     for ds, paths in datasets.items():
-        intake = _load_questionnaire_csv(paths.get("intake_questionnaire"), prefix="intake")
-        post = _load_questionnaire_csv(paths.get("post_experiment_questionnaire"), prefix="post")
+        intake = _load_questionnaire_csv(paths.get("intake_questionnaire"), prefix="intake")  # type: ignore
+        post = _load_questionnaire_csv(paths.get("post_experiment_questionnaire"), prefix="post")  # type: ignore
 
-        _add_long(intake, ds, "intake", prefix="intake", questions=intake_cols)
-        _add_long(post, ds, "post", prefix="post", questions=post_cols)
-        _add_long(intake, ds, "intake", prefix="intake", questions=intake_numeric_cols)
-        _add_long(post, ds, "post", prefix="post", questions=post_numeric_cols)
+        _add_long(intake, ds, "intake", prefix="intake", questions=intake_cols)  # type: ignore
+        _add_long(post, ds, "post", prefix="post", questions=post_cols)  # type: ignore
+        _add_long(intake, ds, "intake", prefix="intake", questions=intake_numeric_cols)  # type: ignore
+        _add_long(post, ds, "post", prefix="post", questions=post_numeric_cols)  # type: ignore
 
         # Optional: dataset-specific wide exports (handy for quick inspection)
         try:
@@ -1823,26 +1826,85 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
         if go is not None:
             plot_df = d.copy()
             plot_df["trial_num"] = plot_df["trial_index"] + 1
-            curve = plot_df.groupby(["dataset", "trial_num"]).agg(
-                miss_press=("miss_press", "mean"),
-                miss_release=("miss_release", "mean"),
-            ).reset_index()
+
+            def _wilson_ci(k: pd.Series, n: pd.Series, z: float = 1.96) -> tuple[pd.Series, pd.Series]:
+                """Wilson score interval for a binomial proportion."""
+                n = n.astype(float)
+                p = k.astype(float) / n
+                denom = 1.0 + (z ** 2) / n
+                centre = (p + (z ** 2) / (2.0 * n)) / denom
+                half = (z / denom) * np.sqrt((p * (1.0 - p) / n) + ((z ** 2) / (4.0 * (n ** 2))))
+                lo = np.clip(centre - half, 0.0, 1.0)
+                hi = np.clip(centre + half, 0.0, 1.0)
+                return lo, hi  # type: ignore
+
+            def _curve_with_ci(metric: str) -> pd.DataFrame:
+                curve = plot_df.groupby(["dataset", "trial_num"])[metric].agg(["sum", "count", "mean"]).reset_index()
+                curve = curve.rename(columns={"sum": "k", "count": "n", "mean": "prop"})
+                curve["ci_lo"], curve["ci_hi"] = _wilson_ci(curve["k"], curve["n"])
+                return curve
+
+            label_map = {"shuffled": "Randomised", "unshuffled": "Fixed-order"}
+            color_map = {
+                "shuffled": ("#1f77b4", "rgba(31,119,180,0.18)"),
+                "unshuffled": ("#ff7f0e", "rgba(255,127,14,0.18)"),
+            }
 
             def _plot_one(metric: str, title: str, fname: str):
+                curve = _curve_with_ci(metric)
                 fig = go.Figure()
                 for ds in ["shuffled", "unshuffled"]:
-                    sub = curve[curve["dataset"] == ds]
+                    sub = curve[curve["dataset"] == ds].sort_values("trial_num")
+                    if sub.empty:
+                        continue
+                    line_col, band_col = color_map.get(ds, (None, "rgba(0,0,0,0.12)"))
+                    disp = label_map.get(ds, ds)
+
                     fig.add_trace(go.Scatter(
-                        x=sub["trial_num"], y=sub[metric],
-                        mode="lines+markers",
-                        name=("Randomised" if ds == "shuffled" else "Fixed-order"),
+                        x=sub["trial_num"],
+                        y=sub["ci_hi"],
+                        mode="lines",
+                        line=dict(width=0),
+                        showlegend=False,
+                        hoverinfo="skip",
                     ))
+                    fig.add_trace(go.Scatter(
+                        x=sub["trial_num"],
+                        y=sub["ci_lo"],
+                        mode="lines",
+                        line=dict(width=0),
+                        fill="tonexty",
+                        fillcolor=band_col,
+                        showlegend=False,
+                        hoverinfo="skip",
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=sub["trial_num"],
+                        y=sub["prop"],
+                        mode="lines+markers",
+                        name=disp,
+                        line=dict(width=3, color=line_col),
+                        marker=dict(size=8, color=line_col),
+                        customdata=np.stack([sub["ci_lo"], sub["ci_hi"]], axis=-1),
+                        hovertemplate=(
+                            "dataset=%{text}<br>trial=%{x}<br>missing=%{y:.3f}"
+                            "<br>95% CI=[%{customdata[0]:.3f}, %{customdata[1]:.3f}]<extra></extra>"
+                        ),
+                        text=[disp] * len(sub),
+                    ))
+
                 fig.update_layout(
                     title=title,
                     xaxis_title="Trial number",
                     yaxis_title="Missingness proportion",
-                    template="plotly_white",
+                    yaxis=dict(range=[-0.05, 1.05]),
+                    template="simple_white",
+                    legend=dict(x=0.98, y=0.98, xanchor="right", yanchor="top",
+                                bgcolor="rgba(255,255,255,0.7)", bordercolor="rgba(0,0,0,0.15)", borderwidth=1),
+                    margin=dict(l=60, r=20, t=60, b=55),
                 )
+                fig.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)")
+                fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)")
                 _save_plot(h, fig, fname)
 
             _plot_one("miss_press", "Missingness of first-press latency by trial number",
@@ -2241,7 +2303,6 @@ def main() -> None:
                             fig = px.violin(
                                 part_break,
                                 x="dataset",
-                                color="dataset",
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2277,7 +2338,6 @@ def main() -> None:
                             fig = px.violin(
                                 part_E,
                                 x="dataset",
-                                color="dataset",
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2383,7 +2443,6 @@ def main() -> None:
         fig = px.violin(
             all_features,
             x="dataset",
-            color="dataset",
             y=metric,
             box=True,
             points="outliers",
@@ -2407,7 +2466,6 @@ def main() -> None:
             fig = px.violin(
                 merged,
                 x="dataset",
-                color="dataset",
                 y=q,
                 box=True,
                 points="outliers",
@@ -2527,7 +2585,6 @@ def main() -> None:
             fig = px.violin(
                 part_metrics,
                 x="dataset",
-                color="dataset",
                 y=m,
                 box=True,
                 points="all",
@@ -2560,7 +2617,6 @@ def main() -> None:
                 fig = px.violin(
                     all_features,
                     x="dataset",
-                    color="dataset",
                     y=m,
                     box=True,
                     points="outliers",
@@ -2602,7 +2658,7 @@ def main() -> None:
             # ----------------------
             vol_col2 = _pick_col(all_features, ["dtrigger_sd", "trigger_sd", "dtrigger_dt_sd"])
             if "yaw_sd" in all_features.columns and vol_col2 is not None:
-                for ds, g in all_features.groupby("dataset"):
+                for ds, g in all_features.groupby("dataset"):  # type: ignore
                     r = _safe_corr(pd.to_numeric(g["yaw_sd"], errors="coerce"),
                                    pd.to_numeric(g[vol_col2], errors="coerce"), min_n=10)
                     logger.info(f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: n/a")  # noqa: E501
@@ -2611,7 +2667,7 @@ def main() -> None:
                 _save_plot(h, fig, name=f"scatter_yaw_sd_vs_{vol_col2}")
 
             if "yaw_forward_frac_15" in all_features.columns and "Q3" in all_features.columns:
-                for ds, g in all_features.groupby("dataset"):
+                for ds, g in all_features.groupby("dataset"):  # type: ignore
                     r = _safe_corr(pd.to_numeric(g["yaw_forward_frac_15"], errors="coerce"),
                                    pd.to_numeric(g["Q3"], errors="coerce"), min_n=10)
                     logger.info(f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: n/a")  # noqa: E501
@@ -2631,7 +2687,7 @@ def main() -> None:
             if coupling_cols:
                 rows = []
                 for c in coupling_cols:
-                    for ds, g in all_features.groupby("dataset"):
+                    for ds, g in all_features.groupby("dataset"):  # type: ignore
                         s = pd.to_numeric(g[c], errors="coerce").dropna()
                         if s.shape[0] == 0:
                             continue
@@ -2649,7 +2705,6 @@ def main() -> None:
                     fig = px.violin(
                         all_features,
                         x="dataset",
-                        color="dataset",
                         y=c,
                         box=True,
                         points="outliers",
@@ -2690,7 +2745,7 @@ def main() -> None:
         part_out_rows = []
         if outcome_defs:
             for (ds, pid), g in base_trials.groupby(["dataset", "participant_id"]):
-                row = {"dataset": ds, "participant_id": pid, "participant_key": _normalize_pid(pid)}
+                row = {"dataset": ds, "participant_id": pid, "participant_key": _normalize_pid(pid)}  # type: ignore
                 for out_name, (col, filt) in outcome_defs.items():
                     gg = g
                     if isinstance(filt, dict):
@@ -2708,8 +2763,8 @@ def main() -> None:
         # Load questionnaires per dataset and merge
         q_merged_all = []
         for ds_name, paths in DATASETS.items():
-            intake = _load_questionnaire_csv(paths.get("intake_questionnaire"), prefix="intake")
-            post = _load_questionnaire_csv(paths.get("post_experiment_questionnaire"), prefix="post")
+            intake = _load_questionnaire_csv(paths.get("intake_questionnaire"), prefix="intake")  # type: ignore
+            post = _load_questionnaire_csv(paths.get("post_experiment_questionnaire"), prefix="post")  # type: ignore
             if intake is None and post is None:
                 continue
             qdf = None
@@ -2717,7 +2772,7 @@ def main() -> None:
                 qdf = intake.merge(post, on="participant_key", how="outer")
             else:
                 qdf = intake if intake is not None else post
-            qdf["dataset"] = ds_name
+            qdf["dataset"] = ds_name  # type: ignore
             q_merged_all.append(qdf)
 
         if not q_merged_all:

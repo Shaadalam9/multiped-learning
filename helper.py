@@ -44,6 +44,54 @@ SAVE_PNG = True
 SAVE_EPS = True
 output = common.get_configs("output")
 plotly_template = common.get_configs("plotly_template")
+
+
+def _normalise_dataset_token_local(value):
+    if value is None:
+        return value
+    s = str(value).strip().lower().replace('_', ' ')
+    if s == 'shuffled' or s == 'randomized' or s == 'randomised':
+        return 'Randomised'
+    if s == 'unshuffled' or s == 'fixed order' or s == 'fixed-order':
+        return 'Fixed order'
+    return value
+
+
+def _humanise_label_local(value):
+    if value is None or not isinstance(value, str):
+        return value
+    s = value.replace('_', ' ')
+    s = s.replace('unshuffled', 'Fixed order').replace('shuffled', 'Randomised')
+    s = s.replace('Normalized', 'Normalised').replace('normalized', 'normalised')
+    if s == 'trigger mean':
+        return 'Mean unsafety'
+    if s == 'dtrigger sd':
+        return 'Unsafety volatility'
+    return s
+
+
+def _sanitise_figure_for_export_local(fig):
+    try:
+        for tr in fig.data:
+            if hasattr(tr, 'name') and isinstance(tr.name, str):
+                tr.name = _humanise_label_local(tr.name)
+            if hasattr(tr, 'legendgroup') and isinstance(tr.legendgroup, str):
+                tr.legendgroup = _humanise_label_local(tr.legendgroup)
+            if hasattr(tr, 'x') and tr.x is not None:
+                tr.x = tuple(_normalise_dataset_token_local(v) if isinstance(v, str) else v for v in tr.x)
+        for k in dir(fig.layout):
+            if k.startswith('xaxis') or k.startswith('yaxis'):
+                ax = getattr(fig.layout, k)
+                try:
+                    if ax.title and isinstance(ax.title.text, str):
+                        ax.title.text = _humanise_label_local(ax.title.text)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return fig
+
+
 font_size = common.get_configs("font_size")
 font_family = common.get_configs("font_family")
 
@@ -807,9 +855,9 @@ class HMD_helper:
 
             try:
                 if paired:
-                    t_stat, p_val = ttest_rel(data1, data2, alternative=type)
+                    t_stat, p_val = ttest_rel(data1, data2, alternative=type)  # type: ignore
                 else:
-                    t_stat, p_val = ttest_ind(data1, data2, equal_var=False, alternative=type)
+                    t_stat, p_val = ttest_ind(data1, data2, equal_var=False, alternative=type)  # type: ignore
 
                 # Handles the nan cases
                 if np.isnan(p_val):  # type: ignore
@@ -2563,8 +2611,8 @@ class HMD_helper:
                 (long_cond["camera"] == cond_row["camera"])
             ]
 
-            r = i // 4 + 1
-            c = i % 4 + 1
+            r = i // 4 + 1  # type: ignore
+            c = i % 4 + 1  # type: ignore
 
             fig.add_trace(
                 go.Violin(
@@ -2572,7 +2620,7 @@ class HMD_helper:
                     box_visible=True,
                     meanline_visible=True,
                     points="all",
-                    name=names[i],
+                    name=names[i],  # type: ignore
                     showlegend=False
                 ),
                 row=r,
@@ -2584,7 +2632,7 @@ class HMD_helper:
             sd = sub["rating"].std(ddof=1)
             med = sub["rating"].median()
 
-            axis_num = i + 1
+            axis_num = i + 1  # type: ignore
             xref = "x domain" if axis_num == 1 else f"x{axis_num} domain"
             yref = "y domain" if axis_num == 1 else f"y{axis_num} domain"
 

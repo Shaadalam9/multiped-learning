@@ -37,6 +37,8 @@ from csu_core import (  # noqa: F401
     _save_plot,
     _trial_num_display,
     _write_plot_index_and_open,
+    DATASET_COLOR_MAP,
+    DATASET_LABEL_MAP,
     compare_participant_metrics,
     compare_shuffled_unshuffled,
 )
@@ -427,37 +429,37 @@ def _between_subject_balance_and_sensitivity(
         if px is not None:
             # completion violin
             if not trials_pp.empty:
-                fig = px.violin(trials_pp, x="dataset", color="dataset", y="n_trials_main",
+                fig = px.violin(trials_pp, x="dataset", y="n_trials_main",
                                 box=True, points="all", hover_data=["participant_id"])
                 fig.update_layout(title="Trial completion per participant (main trials)", yaxis_title="# main trials")
-                _save_plot(h, fig, name="between_subject_trial_completion_violin")
+                _save_plot(h, fig, name="between_subject_trial_completion_violin")  # type: ignore
 
-                fig2 = px.violin(trials_pp, x="dataset", color="dataset", y="completion_frac",
+                fig2 = px.violin(trials_pp, x="dataset", y="completion_frac",
                                  box=True, points="all", hover_data=["participant_id"])
                 fig2.update_layout(title="Completion fraction per participant (vs dataset median)",
                                    yaxis_title="completion fraction")
-                _save_plot(h, fig2, name="between_subject_completion_fraction_violin")
+                _save_plot(h, fig2, name="between_subject_completion_fraction_violin")  # type: ignore
 
             # missingness violin for key outcomes
             if not miss_pp.empty:
                 for oc in outcome_cols:
                     mc = f"missing_frac_{oc}"
                     if mc in miss_pp.columns:
-                        figm = px.violin(miss_pp, x="dataset", color="dataset", y=mc, box=True,
+                        figm = px.violin(miss_pp, x="dataset", y=mc, box=True,
                                          points="all", hover_data=["participant_id"])
                         figm.update_layout(title=f"Missingness per participant: {oc}", yaxis_title="missing fraction")
-                        _save_plot(h, figm, name=f"between_subject_missingness_{oc}")
+                        _save_plot(h, figm, name=f"between_subject_missingness_{oc}")  # type: ignore
 
             # baseline outcome violin
             if not base_pp.empty:
                 for oc in outcome_cols:
                     bc = f"baseline_mean_{oc}"
                     if bc in base_pp.columns:
-                        figb = px.violin(base_pp, x="dataset", color="dataset", y=bc, box=True,
+                        figb = px.violin(base_pp, x="dataset", y=bc, box=True,
                                          points="all", hover_data=["participant_id"])
                         figb.update_layout(title=f"Baseline (first {K} main trials) mean: {oc}",
                                            yaxis_title=f"baseline mean {oc}")
-                        _save_plot(h, figb, name=f"between_subject_baseline_mean_{oc}")
+                        _save_plot(h, figb, name=f"between_subject_baseline_mean_{oc}")  # type: ignore
     except Exception as e:
         logger.info(f"[C] plotting failed (non-fatal): {e}")
 

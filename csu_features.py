@@ -642,7 +642,7 @@ def _extract_yaw_features_from_timeseries(raw_df: pd.DataFrame, video_id: str, p
                 # Within-trial coupling: cross-correlation yaw_speed ↔ dtrigger/dt
                 try:
                     dt_med = float(np.nanmedian(np.diff(t_mid))) if t_mid.size >= 3 else float("nan")
-                    rmax, lag_s = _xcorr_max_r_lag(yaw_speed, dtrig_dt, dt_s=dt_med, max_lag_s=2.0, min_n=10)
+                    rmax, lag_s = _xcorr_max_r_lag(yaw_speed, dtrig_dt, dt_s=dt_med, max_lag_s=2.0, min_n=10)  # type: ignore  # noqa: E501
                     rec["xcorr_yawspd_dtrig_max_r"] = float(rmax)
                     rec["xcorr_yawspd_dtrig_lag_s"] = float(lag_s)
                 except Exception:
@@ -1355,11 +1355,11 @@ def _compute_trigger_features_one_trial(
     cutoff = None
     if analysis_window == "crossing" and mapping_row is not None:
         try:
-            cam = int(mapping_row.get("camera")) if pd.notna(mapping_row.get("camera")) else None
+            cam = int(mapping_row.get("camera")) if pd.notna(mapping_row.get("camera")) else None  # type: ignore
             if cam == 0 and pd.notna(mapping_row.get("cross_p1_time_s")):
-                cutoff = float(mapping_row.get("cross_p1_time_s"))
+                cutoff = float(mapping_row.get("cross_p1_time_s"))  # type: ignore
             elif cam == 1 and pd.notna(mapping_row.get("cross_p2_time_s")):
-                cutoff = float(mapping_row.get("cross_p2_time_s"))
+                cutoff = float(mapping_row.get("cross_p2_time_s"))  # type: ignore
         except Exception:
             cutoff = None
     if cutoff is not None and np.isfinite(cutoff):
@@ -1445,7 +1445,7 @@ def _compute_trigger_features_one_trial(
         ]:
             if col in mapping_row.index and pd.notna(mapping_row.get(col)):
                 try:
-                    rec[outcol] = float(release_t - float(mapping_row.get(col)))
+                    rec[outcol] = float(release_t - float(mapping_row.get(col)))  # type: ignore
                 except Exception:
                     rec[outcol] = float("nan")
 

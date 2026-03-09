@@ -55,7 +55,7 @@ def _first_existing(df: pd.DataFrame, cols: List[str]) -> Optional[str]:
 
 def _fmt_num(val: object, digits: int = 3) -> str:
     try:
-        f = float(val)
+        f = float(val)  # pyright: ignore[reportArgumentType]
     except Exception:
         return "n/a"
     if np.isnan(f):
@@ -212,7 +212,7 @@ def _add_trial_overview(lines: List[str], output_root: str) -> None:
             for row in counts.itertuples(index=False):
                 _log_and_collect(
                     lines,
-                    f"- {row.dataset}: participants={int(row.participant_count)}, trial_rows={int(row.trial_rows)}",
+                    f"- {row.dataset}: participants={int(row.participant_count)}, trial_rows={int(row.trial_rows)}",  # type: ignore  # noqa: E501
                 )
         break
 
