@@ -25,11 +25,17 @@ from custom_logger import CustomLogger
 from logmod import logs
 import csu_pipeline as pipeline
 import csu_mixed_models as mm
+
+
 logs(show_level=common.get_configs("logger_level"), show_color=True)
 logger = CustomLogger(__name__)
+
+
 MAPPING_CSV = common.get_configs("mapping")
 OUTPUT_ROOT = common.get_configs("output")
 PAPER_LOG_TOP_N = int(os.environ.get("CSU_PAPER_LOG_TOP_N", "8"))
+
+
 def _read_csv_if_exists(path: str) -> Optional[pd.DataFrame]:
     if not path or not os.path.exists(path):
         return None
@@ -38,11 +44,15 @@ def _read_csv_if_exists(path: str) -> Optional[pd.DataFrame]:
     except Exception as e:
         logger.error(f"[Paper] Failed reading {path}: {e}")
         return None
+
+
 def _first_existing(df: pd.DataFrame, cols: List[str]) -> Optional[str]:
     for c in cols:
         if c in df.columns:
             return c
     return None
+
+
 def _fmt_num(val: object, digits: int = 3) -> str:
     try:
         f = float(val)
@@ -51,6 +61,8 @@ def _fmt_num(val: object, digits: int = 3) -> str:
     if np.isnan(f):
         return "n/a"
     return f"{f:.{digits}f}"
+
+
 def _sort_results(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame()
@@ -68,6 +80,8 @@ def _sort_results(df: pd.DataFrame) -> pd.DataFrame:
     if sort_cols:
         out = out.sort_values(sort_cols, ascending=asc, na_position="last")
     return out
+
+
 def _sig_counts(df: pd.DataFrame) -> Tuple[int, int, Optional[str], Optional[str]]:
     qcol = _first_existing(df, ["q_fdr", "q_value", "p_fdr"])
     pcol = _first_existing(df, ["p", "p_value", "p_tost"])
@@ -78,6 +92,8 @@ def _sig_counts(df: pd.DataFrame) -> Tuple[int, int, Optional[str], Optional[str
     if pcol is not None:
         psig = int(pd.to_numeric(df[pcol], errors="coerce").lt(0.05).sum())
     return qsig, psig, qcol, pcol
+
+
 def _extra_group_bits(row: pd.Series) -> str:
     skip = {
         "source", "unit", "metric", "dv", "model", "term",
@@ -95,14 +111,18 @@ def _extra_group_bits(row: pd.Series) -> str:
             continue
         bits.append(f"{col}={val}")
     return "; ".join(bits)
+
+
 def _render_compare_row(row: pd.Series) -> str:
     metric = str(row.get("metric", "metric"))
     context = _extra_group_bits(row)
     means = f"shuffled={_fmt_num(row.get('mean_shuffled'))}, unshuffled={_fmt_num(row.get('mean_unshuffled'))}"
-    stats = f"d={_fmt_num(row.get('cohens_d'))}, p={_fmt_num(row.get('p_value', row.get('p')))}, q={_fmt_num(row.get('q_value', row.get('p_fdr')))}"
+    stats = f"d={_fmt_num(row.get('cohens_d'))}, p={_fmt_num(row.get('p_value', row.get('p')))}, q={_fmt_num(row.get('q_value', row.get('p_fdr')))}"  # noqa:E501
     if context:
         return f"- {metric} [{context}] | {means} | {stats}"
     return f"- {metric} | {means} | {stats}"
+
+
 def _render_mixed_row(row: pd.Series) -> str:
     dv = str(row.get("dv", "dv"))
     term = str(row.get("term", "term"))
@@ -111,22 +131,29 @@ def _render_mixed_row(row: pd.Series) -> str:
     if model and model != "nan":
         context += f" | {model}"
     return (
-        f"- {context} | coef={_fmt_num(row.get('coef'))}, 95% CI [{_fmt_num(row.get('ci_lo'))}, {_fmt_num(row.get('ci_hi'))}]"
+        f"- {context} | coef={_fmt_num(row.get('coef'))}, 95% CI [{_fmt_num(row.get('ci_lo'))}, {_fmt_num(row.get('ci_hi'))}]"  # noqa:E501
         f" | p={_fmt_num(row.get('p'))}, q={_fmt_num(row.get('q_fdr'))}"
     )
+
+
 def _render_tost_row(row: pd.Series) -> str:
     dv = str(row.get("dv", "dv"))
     equivalent = pd.to_numeric(pd.Series([row.get("p_tost")]), errors="coerce").lt(0.05).iloc[0]
     verdict = "equivalent" if bool(equivalent) else "not equivalent"
     return (
-        f"- {dv} | coef={_fmt_num(row.get('coef'))}, 95% CI [{_fmt_num(row.get('ci_lo'))}, {_fmt_num(row.get('ci_hi'))}]"
+        f"- {dv} | coef={_fmt_num(row.get('coef'))}, 95% CI [{_fmt_num(row.get('ci_lo'))}, {_fmt_num(row.get('ci_hi'))}]"  # noqa:E501
         f" | delta={_fmt_num(row.get('delta'))}, p_tost={_fmt_num(row.get('p_tost'))}, q={_fmt_num(row.get('q_fdr'))}"
         f" | {verdict}"
     )
+
+
 def _log_and_collect(lines: List[str], msg: str) -> None:
     lines.append(msg)
     logger.info(msg)
-def _append_table_preview(lines: List[str], label: str, df: Optional[pd.DataFrame], renderer, top_n: int = PAPER_LOG_TOP_N) -> pd.DataFrame:
+
+
+def _append_table_preview(lines: List[str], label: str, df: Optional[pd.DataFrame],
+                          renderer, top_n: int = PAPER_LOG_TOP_N) -> pd.DataFrame:
     if df is None or df.empty:
         _log_and_collect(lines, f"[Paper] {label}: no rows found")
         return pd.DataFrame()
@@ -134,12 +161,14 @@ def _append_table_preview(lines: List[str], label: str, df: Optional[pd.DataFram
     qsig, psig, qcol, pcol = _sig_counts(ordered)
     _log_and_collect(
         lines,
-        f"[Paper] {label}: rows={len(ordered)}, q<.05={qsig}{f' ({qcol})' if qcol else ''}, p<.05={psig}{f' ({pcol})' if pcol else ''}",
+        f"[Paper] {label}: rows={len(ordered)}, q<.05={qsig}{f' ({qcol})' if qcol else ''}, p<.05={psig}{f' ({pcol})' if pcol else ''}",  # noqa:E501
     )
     top = ordered.head(top_n).copy()
     for _, row in top.iterrows():
         _log_and_collect(lines, renderer(row))
     return top
+
+
 def _write_text_report(path: str, lines: List[str]) -> None:
     try:
         with open(path, "w", encoding="utf-8") as f:
@@ -147,6 +176,8 @@ def _write_text_report(path: str, lines: List[str]) -> None:
         logger.info(f"[Paper] wrote: {path}")
     except Exception as e:
         logger.error(f"[Paper] Failed writing {path}: {e}")
+
+
 def _write_csv_report(path: str, tables: List[pd.DataFrame]) -> None:
     tables = [t for t in tables if t is not None and not t.empty]
     if not tables:
@@ -157,6 +188,8 @@ def _write_csv_report(path: str, tables: List[pd.DataFrame]) -> None:
         logger.info(f"[Paper] wrote: {path}")
     except Exception as e:
         logger.error(f"[Paper] Failed writing {path}: {e}")
+
+
 def _add_trial_overview(lines: List[str], output_root: str) -> None:
     trial_path_candidates = [
         os.path.join(output_root, "trigger_trial_features_with_Q123_all.csv"),
@@ -182,6 +215,8 @@ def _add_trial_overview(lines: List[str], output_root: str) -> None:
                     f"- {row.dataset}: participants={int(row.participant_count)}, trial_rows={int(row.trial_rows)}",
                 )
         break
+
+
 def emit_compare_digest(output_root: str = OUTPUT_ROOT) -> None:
     lines: List[str] = []
     tables: List[pd.DataFrame] = []
@@ -210,6 +245,8 @@ def emit_compare_digest(output_root: str = OUTPUT_ROOT) -> None:
     csv_path = os.path.join(output_root, "paper_compare_digest_top_rows.csv")
     _write_text_report(txt_path, lines)
     _write_csv_report(csv_path, tables)
+
+
 def emit_mixed_digest(output_root: str = OUTPUT_ROOT) -> None:
     lines: List[str] = []
     tables: List[pd.DataFrame] = []
@@ -242,6 +279,8 @@ def emit_mixed_digest(output_root: str = OUTPUT_ROOT) -> None:
     csv_path = os.path.join(output_root, "paper_mixed_digest_top_rows.csv")
     _write_text_report(txt_path, lines)
     _write_csv_report(csv_path, tables)
+
+
 def emit_run_digest(output_root: str = OUTPUT_ROOT) -> None:
     lines: List[str] = []
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -258,6 +297,8 @@ def emit_run_digest(output_root: str = OUTPUT_ROOT) -> None:
         if os.path.exists(path):
             _log_and_collect(lines, f"[Paper] {fn}: {path}")
     _write_text_report(os.path.join(output_root, "paper_run_digest.txt"), lines)
+
+
 def run_compare() -> None:
     """Run the A to F comparison pipeline."""
     runner = pipeline.ComparisonPipeline(
@@ -271,10 +312,14 @@ def run_compare() -> None:
         output_root=OUTPUT_ROOT,
     )
     runner.run()
+
+
 def run_mixed(trial_df: Optional[pd.DataFrame] = None) -> None:
     """Run the mixed models analysis."""
     runner = mm.MixedModelsPipeline(output_root=OUTPUT_ROOT)
     runner.run(trial_df=trial_df)
+
+
 if __name__ == "__main__":
     run_compare()
     emit_compare_digest()

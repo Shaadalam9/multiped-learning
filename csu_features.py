@@ -1119,8 +1119,8 @@ def summarize_and_plot_yaw_results(
         ymax = float(np.nanmax(grp_ctx["pct_within"])) if grp_ctx["pct_within"].notna().any() else 1.0
         y0, y1 = _axis_margin(ymin, ymax, min_margin=0.8)
         fig.update_yaxes(title_text="Percent within ±15°", range=[y0, y1])
-        fig.update_xaxes(title_text="Context (yielding/eHMI)")
-        fig.update_layout(legend_title_text="dataset", margin=dict(t=70, l=70, r=20, b=70), height=550)
+        fig.update_xaxes(title_text="Condition context (yielding and eHMI)")
+        fig.update_layout(legend_title_text="Dataset", margin=dict(t=70, l=70, r=20, b=70), height=550)
 
         logger.info("[YAW] plotting yaw_forward_fraction_by_context")
         _save_plot(h, fig, "yaw_forward_fraction_by_context", out_root=out_root)
@@ -1168,8 +1168,8 @@ def summarize_and_plot_yaw_results(
             ymax2 = float(np.nanmax(grp_cam2["pct_within"])) if grp_cam2["pct_within"].notna().any() else 1.0
             y0, y1 = _axis_margin(ymin2, ymax2, min_margin=0.8)
             fig2.update_yaxes(title_text="Percent within ±15°", range=[y0, y1])
-            fig2.update_xaxes(title_text="Context (camera | yielding/eHMI)", tickangle=-25)
-            fig2.update_layout(legend_title_text="dataset", margin=dict(t=70, l=70, r=20, b=110), height=620)
+            fig2.update_xaxes(title_text="Condition context (camera, yielding and eHMI)", tickangle=-25)
+            fig2.update_layout(legend_title_text="Dataset", margin=dict(t=70, l=70, r=20, b=110), height=620)
 
             logger.info("[YAW] plotting yaw_forward_fraction_by_context_camera (8 contexts)")
             _save_plot(h, fig2, "yaw_forward_fraction_by_context_camera", out_root=out_root)
@@ -1207,20 +1207,20 @@ def summarize_and_plot_yaw_results(
         ymax = float(np.nanmax(by_p_ds[col])) if by_p_ds[col].notna().any() else 1.0
         y0, y1 = _axis_margin(ymin, ymax, min_margin=0.02 * (abs(ymax) + 1.0))
         fig.update_yaxes(title_text=ylab, range=[y0, y1])
-        fig.update_xaxes(title_text="dataset")
-        fig.update_layout(legend_title_text="dataset", margin=dict(t=70, l=70, r=20, b=70), height=520)
+        fig.update_xaxes(title_text="Dataset")
+        fig.update_layout(legend_title_text="Dataset", margin=dict(t=70, l=70, r=20, b=70), height=520)
         _save_plot(h, fig, out_name, out_root=out_root)
 
     _plot_metric_by_dataset(
         "yaw_sd",
-        "Head-yaw variability (SD) by dataset (participant means)",
-        "yaw_sd",
+        "Head yaw variability by dataset (participant means)",
+        _pretty_label("yaw_sd"),
         "yaw_sd_by_dataset",
     )
     _plot_metric_by_dataset(
         "yaw_mean",
-        "Mean head yaw (deg) by dataset (participant means)",
-        "yaw_mean",
+        "Mean head yaw by dataset (participant means)",
+        _pretty_label("yaw_mean"),
         "yaw_mean_by_dataset",
     )
     _plot_metric_by_dataset(

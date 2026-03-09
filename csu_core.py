@@ -15,6 +15,7 @@ Public API:
 from __future__ import annotations
 
 import os
+import re
 import warnings
 import math
 from typing import Optional, List, Tuple, Any
@@ -43,6 +44,101 @@ from csu_yaw_constants import _YAW_CANDIDATES, _QUAT_REGEX, _QUAT_LIST_COL_PAT  
 
 HAVE_SM = True
 logger = CustomLogger(__name__)  # use custom logger
+
+
+# Consistent shuffled/unshuffled palette used across all figures.
+DATASET_COLOR_MAP = {
+    "shuffled": "#1f77b4",
+    "unshuffled": "#ff7f0e",
+}
+DATASET_LABEL_MAP = {
+    "shuffled": "Randomised",
+    "unshuffled": "Fixed order",
+}
+DATASET_CATEGORY_ORDER = {"dataset": ["shuffled", "unshuffled"]}
+
+
+def _rgba_from_hex(hex_color: str, alpha: float) -> str:
+    """Convert '#RRGGBB' to 'rgba(r,g,b,a)'."""
+    hc = str(hex_color).strip().lstrip("#")
+    if len(hc) != 6:
+        return f"rgba(0,0,0,{alpha})"
+    r = int(hc[0:2], 16)
+    g = int(hc[2:4], 16)
+    b = int(hc[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _dataset_key_from_trace_label(label: Optional[str]) -> Optional[str]:
+    """Infer dataset key from a Plotly trace or legend label."""
+    if label is None:
+        return None
+    s = str(label).strip().lower()
+    if ("unshuffled" in s) or ("fixed-order" in s) or ("fixed order" in s):
+        return "unshuffled"
+    if ("shuffled" in s) or ("randomised" in s) or ("randomized" in s):
+        return "shuffled"
+    return None
+
+
+def _apply_dataset_palette(fig) -> None:
+    """Force a consistent shuffled/unshuffled palette on Plotly traces."""
+    if fig is None or not hasattr(fig, "data"):
+        return
+
+    simple_labels = {"shuffled", "unshuffled", "Randomised", "Randomized", "Fixed-order", "Fixed order"}
+
+    for tr in fig.data:
+        ds_key = None
+        for candidate in [getattr(tr, "name", None), getattr(tr, "legendgroup", None)]:
+            ds_key = _dataset_key_from_trace_label(candidate)
+            if ds_key is not None:
+                break
+        if ds_key is None:
+            continue
+
+        color = DATASET_COLOR_MAP.get(ds_key)
+        label = DATASET_LABEL_MAP.get(ds_key)
+        if color is None:
+            continue
+
+        try:
+            if getattr(tr, "name", None) in simple_labels:
+                tr.name = label
+        except Exception:
+            pass
+        try:
+            if getattr(tr, "legendgroup", None) in simple_labels:
+                tr.legendgroup = label
+        except Exception:
+            pass
+
+        try:
+            if hasattr(tr, "line") and tr.line is not None:
+                tr.line.color = color
+        except Exception:
+            pass
+        try:
+            if hasattr(tr, "marker") and tr.marker is not None:
+                tr.marker.color = color
+                if getattr(tr.marker, "line", None) is not None and getattr(tr.marker.line, "color", None) is None:
+                    tr.marker.line.color = color
+        except Exception:
+            pass
+        try:
+            if hasattr(tr, "fillcolor"):
+                tr.fillcolor = _rgba_from_hex(color, 0.28)
+        except Exception:
+            pass
+
+    try:
+        fig.update_layout(
+            colorway=[DATASET_COLOR_MAP["shuffled"], DATASET_COLOR_MAP["unshuffled"]],
+            legend_title_text="Dataset",
+        )
+    except Exception:
+        pass
+
 
 
 # -----------------------

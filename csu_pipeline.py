@@ -2241,6 +2241,7 @@ def main() -> None:
                             fig = px.violin(
                                 part_break,
                                 x="dataset",
+                                color="dataset",
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2276,6 +2277,7 @@ def main() -> None:
                             fig = px.violin(
                                 part_E,
                                 x="dataset",
+                                color="dataset",
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2381,6 +2383,7 @@ def main() -> None:
         fig = px.violin(
             all_features,
             x="dataset",
+            color="dataset",
             y=metric,
             box=True,
             points="outliers",
@@ -2404,6 +2407,7 @@ def main() -> None:
             fig = px.violin(
                 merged,
                 x="dataset",
+                color="dataset",
                 y=q,
                 box=True,
                 points="outliers",
@@ -2523,6 +2527,7 @@ def main() -> None:
             fig = px.violin(
                 part_metrics,
                 x="dataset",
+                color="dataset",
                 y=m,
                 box=True,
                 points="all",
@@ -2555,6 +2560,7 @@ def main() -> None:
                 fig = px.violin(
                     all_features,
                     x="dataset",
+                    color="dataset",
                     y=m,
                     box=True,
                     points="outliers",
@@ -2643,6 +2649,7 @@ def main() -> None:
                     fig = px.violin(
                         all_features,
                         x="dataset",
+                        color="dataset",
                         y=c,
                         box=True,
                         points="outliers",
