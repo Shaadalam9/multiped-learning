@@ -194,7 +194,9 @@ def _mm_means_plot(df: pd.DataFrame, dv: str, factor: str, name: str, h: HMD_hel
         fig.update_layout(title=f"{dv}: dataset × {factor} (means ±95% CI)", xaxis_title=factor, yaxis_title=dv)
         _save_plot(h, fig, name=name)
     else:
-        fig = px.line(out, x=factor, y="mean", color="dataset", markers=True)
+        fig = px.line(out, x=factor, y="mean", color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, markers=True)
         fig.update_layout(title=f"{dv}: dataset × {factor} (means ±95% CI)", yaxis_title=dv)
         _save_plot(h, fig, name=name)
 
@@ -429,12 +431,18 @@ def _between_subject_balance_and_sensitivity(
         if px is not None:
             # completion violin
             if not trials_pp.empty:
-                fig = px.violin(trials_pp, x="dataset", y="n_trials_main",
+                fig = px.violin(trials_pp, x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, y="n_trials_main",
                                 box=True, points="all", hover_data=["participant_id"])
                 fig.update_layout(title="Trial completion per participant (main trials)", yaxis_title="# main trials")
                 _save_plot(h, fig, name="between_subject_trial_completion_violin")  # type: ignore
 
-                fig2 = px.violin(trials_pp, x="dataset", y="completion_frac",
+                fig2 = px.violin(trials_pp, x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, y="completion_frac",
                                  box=True, points="all", hover_data=["participant_id"])
                 fig2.update_layout(title="Completion fraction per participant (vs dataset median)",
                                    yaxis_title="completion fraction")
@@ -445,7 +453,10 @@ def _between_subject_balance_and_sensitivity(
                 for oc in outcome_cols:
                     mc = f"missing_frac_{oc}"
                     if mc in miss_pp.columns:
-                        figm = px.violin(miss_pp, x="dataset", y=mc, box=True,
+                        figm = px.violin(miss_pp, x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, y=mc, box=True,
                                          points="all", hover_data=["participant_id"])
                         figm.update_layout(title=f"Missingness per participant: {oc}", yaxis_title="missing fraction")
                         _save_plot(h, figm, name=f"between_subject_missingness_{oc}")  # type: ignore
@@ -455,7 +466,10 @@ def _between_subject_balance_and_sensitivity(
                 for oc in outcome_cols:
                     bc = f"baseline_mean_{oc}"
                     if bc in base_pp.columns:
-                        figb = px.violin(base_pp, x="dataset", y=bc, box=True,
+                        figb = px.violin(base_pp, x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, y=bc, box=True,
                                          points="all", hover_data=["participant_id"])
                         figb.update_layout(title=f"Baseline (first {K} main trials) mean: {oc}",
                                            yaxis_title=f"baseline mean {oc}")
@@ -647,7 +661,9 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
                 if not tmp.empty:
                     grp = tmp.groupby(["dataset", "trial_index"])[dv].mean().reset_index()
                     grp["trial_num"] = _trial_num_display(grp["trial_index"])
-                    fig = px.line(grp, x="trial_num", y=dv, color="dataset", markers=True)
+                    fig = px.line(grp, x="trial_num", y=dv, color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, markers=True)
                     fig.update_layout(title=f"{dv}: mean over trial number (dataset)", xaxis_title="Trial number")
                     _save_plot(h, fig, name=f"MM2_curve_{dv}_over_trial_index")
 
@@ -715,7 +731,9 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
             if px is not None:
                 tmp = sdf[["dataset", "lag1", dv_model]].dropna()
                 if not tmp.empty:
-                    fig = px.scatter(tmp, x="lag1", y=dv_model, color="dataset", trendline="ols")
+                    fig = px.scatter(tmp, x="lag1", y=dv_model, color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, trendline="ols")
                     fig.update_layout(title=f"{dv}: DV_t vs DV_(t-1) (by dataset)")
                     _save_plot(h, fig, name=f"MM3_scatter_lag_{dv}")
 

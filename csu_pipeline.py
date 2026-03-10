@@ -39,6 +39,7 @@ from csu_core import (  # noqa: F401
     _print_table,
     _read_csv_loose,
     _roc_curve_and_auc,
+    _rgba_from_hex,
     _safe_corr,
     _safe_two_sample_test,
     _save_plot,
@@ -313,12 +314,12 @@ def _factor_drift_curve(df: pd.DataFrame, factor_col: str) -> pd.DataFrame:
 
 
 def _plot_factor_drift_by_trial_index(df: pd.DataFrame, factor_col: str, title: str, name: str, h: HMD_helper) -> None:
-    """Plot factor composition drift over trial_index (Randomised vs Fixed-order).
+    """Plot factor composition drift over trial_index (Randomised vs Fixed order).
 
     Style is tuned for paper figures:
-    - Dots + connecting lines
-    - Fixed-order can be 0/1 by construction (same trial for everyone)
-    - 95% CI band shown for Randomised (shuffled) only
+    - dots + connecting lines
+    - Fixed order can be 0/1 by construction (same trial for everyone)
+    - 95% CI band shown for Randomised only
     """
     if go is None:
         logger.warning("[plot] plotly.graph_objects not available; skipping factor drift plots.")
@@ -329,15 +330,18 @@ def _plot_factor_drift_by_trial_index(df: pd.DataFrame, factor_col: str, title: 
         logger.info(f"[plot] factor drift: no data for {factor_col}; skipping.")
         return
 
-    # Display names + colors (match typical paper styling)
-    label_map = {"shuffled": "Randomised", "unshuffled": "Fixed-order"}
-    color_map = {
-        "shuffled": "#1f77b4",    # blue
-        "unshuffled": "#ff7f0e",  # orange
+    # Use the shared dataset labels and colours so every figure matches.
+    label_map = {
+        "shuffled": DATASET_LABEL_MAP["shuffled"],
+        "unshuffled": DATASET_LABEL_MAP["unshuffled"],
     }
-    band_color = "rgba(31,119,180,0.18)"  # light blue
+    color_map = {
+        "shuffled": DATASET_COLOR_MAP["shuffled"],
+        "unshuffled": DATASET_COLOR_MAP["unshuffled"],
+    }
+    band_color = _rgba_from_hex(DATASET_COLOR_MAP["shuffled"], 0.18)
 
-    # Order traces for legend (Randomised first)
+    # Order traces for legend
     ds_order = [ds for ds in ["shuffled", "unshuffled"] if ds in set(curve["dataset"])]
     ds_order += [ds for ds in sorted(curve["dataset"].unique()) if ds not in ds_order]
 
@@ -345,10 +349,13 @@ def _plot_factor_drift_by_trial_index(df: pd.DataFrame, factor_col: str, title: 
 
     for ds in ds_order:
         sub = curve[curve["dataset"] == ds].sort_values("trial_index")
+        if sub.empty:
+            continue
+
         disp = label_map.get(ds, str(ds))
         col = color_map.get(ds, None)
 
-        # CI band (Randomised only)
+        # CI band for Randomised only
         if ds == "shuffled":
             fig.add_trace(
                 go.Scatter(
@@ -373,32 +380,35 @@ def _plot_factor_drift_by_trial_index(df: pd.DataFrame, factor_col: str, title: 
                 )
             )
 
-        # Mean line with dots
         fig.add_trace(
             go.Scatter(
                 x=_trial_num_display(sub["trial_index"]),
                 y=sub["prop"],
                 mode="lines+markers",
                 name=disp,
-                line=dict(width=3, color=col),
-                marker=dict(size=9, symbol="circle", color=col),
-                hovertemplate="dataset=%{text}<br>trial=%{x}<br>prop=%{y:.3f}<extra></extra>",
-                text=[disp] * len(sub),
+                legendgroup=disp,
+                line=dict(color=col, width=2),
+                marker=dict(color=col, size=7),
+                hovertemplate=(
+                    "Dataset=%{fullData.name}<br>"
+                    "Trial number=%{x}<br>"
+                    f"{factor_col} proportion=%{{y:.3f}}<extra></extra>"
+                ),
             )
         )
 
     fig.update_layout(
         title=title,
-        template="simple_white",
         xaxis_title="Trial number",
-        yaxis_title="Proportion",
-        yaxis=dict(range=[-0.05, 1.05]),
-        legend=dict(x=0.98, y=0.98, xanchor="right", yanchor="top", bgcolor="rgba(255,255,255,0.7)",
-                    bordercolor="rgba(0,0,0,0.15)", borderwidth=1),
-        margin=dict(l=60, r=20, t=60, b=55),
+        yaxis_title=f"Proportion with {factor_col}=1",
+        template="plotly_white",
+        legend_title_text="Dataset",
     )
-    fig.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)")
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)")
+
+    try:
+        fig.update_yaxes(range=[-0.02, 1.02])
+    except Exception:
+        pass
 
     _save_plot(h, fig, name=name)
 
@@ -2303,6 +2313,9 @@ def main() -> None:
                             fig = px.violin(
                                 part_break,
                                 x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2338,6 +2351,9 @@ def main() -> None:
                             fig = px.violin(
                                 part_E,
                                 x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2355,6 +2371,8 @@ def main() -> None:
                         x="bin_center",
                         y="y_mean",
                         color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                         error_y="sem",
                     )
                     fig.update_layout(
@@ -2443,6 +2461,9 @@ def main() -> None:
         fig = px.violin(
             all_features,
             x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
             y=metric,
             box=True,
             points="outliers",
@@ -2466,6 +2487,9 @@ def main() -> None:
             fig = px.violin(
                 merged,
                 x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                 y=q,
                 box=True,
                 points="outliers",
@@ -2489,6 +2513,8 @@ def main() -> None:
                 x="Q3",
                 y=vol_col,
                 color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                 hover_data=hover_cols,
             )
             fig.update_layout(title=f"Q3 vs {vol_col} (trial-level, colored by dataset)")
@@ -2503,6 +2529,8 @@ def main() -> None:
                 x="Q3",
                 y=trans_col,
                 color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                 hover_data=hover_cols,
             )
             fig.update_layout(title=f"Q3 vs {trans_col} (trial-level, colored by dataset)")
@@ -2517,6 +2545,8 @@ def main() -> None:
                 x="Q2",
                 y=unsafe_col,
                 color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                 hover_data=hover_cols,
             )
             fig.update_layout(title=f"Q2 vs {unsafe_col} (trial-level, colored by dataset)")
@@ -2585,6 +2615,9 @@ def main() -> None:
             fig = px.violin(
                 part_metrics,
                 x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                 y=m,
                 box=True,
                 points="all",
@@ -2617,6 +2650,9 @@ def main() -> None:
                 fig = px.violin(
                     all_features,
                     x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                     y=m,
                     box=True,
                     points="outliers",
@@ -2632,24 +2668,32 @@ def main() -> None:
 
             if "yaw_abs_mean" in all_features.columns and trig_mean_col is not None:
                 fig = px.scatter(all_features, x="yaw_abs_mean", y=trig_mean_col,
-                                 color="dataset", hover_data=hover_cols2)
+                                 color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_abs_mean vs {trig_mean_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_abs_mean_vs_{trig_mean_col}")
 
             if "yaw_forward_frac_15" in all_features.columns and unsafe_col is not None:
                 fig = px.scatter(all_features, x="yaw_forward_frac_15", y=unsafe_col,
-                                 color="dataset", hover_data=hover_cols2)
+                                 color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_forward_frac_15 vs {unsafe_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_forward_frac_15_vs_{unsafe_col}")
 
             if "yaw_speed_mean" in all_features.columns and ramp_col is not None:
-                fig = px.scatter(all_features, x="yaw_speed_mean", y=ramp_col, color="dataset", hover_data=hover_cols2)
+                fig = px.scatter(all_features, x="yaw_speed_mean", y=ramp_col, color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_speed_mean vs {ramp_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_speed_mean_vs_{ramp_col}")
 
             if "yaw_speed_pre_press_mean_1s" in all_features.columns and press_lat_col is not None:
                 fig = px.scatter(all_features, x="yaw_speed_pre_press_mean_1s", y=press_lat_col,
-                                 color="dataset", hover_data=hover_cols2)
+                                 color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_speed_pre_press_mean_1s vs {press_lat_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_speed_pre_press_mean_1s_vs_{press_lat_col}")
 
@@ -2662,7 +2706,9 @@ def main() -> None:
                     r = _safe_corr(pd.to_numeric(g["yaw_sd"], errors="coerce"),
                                    pd.to_numeric(g[vol_col2], errors="coerce"), min_n=10)
                     logger.info(f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: n/a")  # noqa: E501
-                fig = px.scatter(all_features, x="yaw_sd", y=vol_col2, color="dataset", hover_data=hover_cols2)
+                fig = px.scatter(all_features, x="yaw_sd", y=vol_col2, color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
                 fig.update_layout(title=f"Trial-level coupling: yaw_sd vs {vol_col2}")
                 _save_plot(h, fig, name=f"scatter_yaw_sd_vs_{vol_col2}")
 
@@ -2672,6 +2718,8 @@ def main() -> None:
                                    pd.to_numeric(g["Q3"], errors="coerce"), min_n=10)
                     logger.info(f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: n/a")  # noqa: E501
                 fig = px.scatter(all_features, x="yaw_forward_frac_15", y="Q3", color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                                  hover_data=hover_cols2)
                 fig.update_layout(title="Trial-level coupling: yaw_forward_frac_15 vs Q3 (understanding)")
                 _save_plot(h, fig, name="scatter_yaw_forward_frac_15_vs_Q3")
@@ -2705,6 +2753,9 @@ def main() -> None:
                     fig = px.violin(
                         all_features,
                         x="dataset",
+                color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                         y=c,
                         box=True,
                         points="outliers",
@@ -2863,6 +2914,8 @@ def main() -> None:
                             x=mcol,
                             y=ocol,
                             color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                             hover_data=hoverP,
                         )
                         fig.update_layout(title=f"Moderator: {mcol} vs {ocol}")
@@ -2891,6 +2944,8 @@ def main() -> None:
                         x="group",
                         y=ocol,
                         color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                         box=True,
                         points="all",
                         hover_data=["participant_id"],
@@ -2978,6 +3033,8 @@ def main() -> None:
                 x="signal",
                 y="auc",
                 color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                 barmode="group",
                 hover_data=["n"],
             )
@@ -3003,6 +3060,8 @@ def main() -> None:
                     x="fpr",
                     y="tpr",
                     color="dataset",
+                color_discrete_map=DATASET_COLOR_MAP,
+                category_orders={"dataset": ["shuffled", "unshuffled"]},
                     line_dash="signal",
                     hover_data=["auc"],
                 )

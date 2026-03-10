@@ -55,12 +55,14 @@ DATASET_LABEL_MAP = {
     "randomized": "Randomised",
     "randomised": "Randomised",
 }
+
 DATASET_COLOUR_MAP = {
     "shuffled": "#1f77b4",
     "unshuffled": "#ff7f0e",
     "Randomised": "#1f77b4",
     "Fixed order": "#ff7f0e",
 }
+
 # Compatibility alias for earlier patches that used American spelling.
 DATASET_COLOR_MAP = DATASET_COLOUR_MAP
 
@@ -76,13 +78,13 @@ def _normalise_dataset_token(value: Any) -> Any:
 
 
 def _rgba_from_hex(hex_colour: str, alpha: float) -> str:
-    c = str(hex_colour).lstrip('#')
+    c = str(hex_colour).lstrip("#")
     if len(c) != 6:
-        return f'rgba(0,0,0,{alpha})'
+        return f"rgba(0,0,0,{alpha})"
     r = int(c[0:2], 16)
     g = int(c[2:4], 16)
     b = int(c[4:6], 16)
-    return f'rgba({r},{g},{b},{alpha})'
+    return f"rgba({r},{g},{b},{alpha})"
 
 
 def _humanise_label(value: Any) -> Any:
@@ -202,54 +204,80 @@ def _sanitise_axis_like(obj: Any) -> None:
         pass
 
 
+def _dataset_colour_from_any_label(label: Any) -> Optional[str]:
+    if label is None:
+        return None
+
+    s = str(label).strip()
+    if s in DATASET_COLOUR_MAP:
+        return DATASET_COLOUR_MAP[s]
+
+    key = s.lower().replace("_", " ")
+    if key in {"shuffled", "randomised", "randomized"}:
+        return DATASET_COLOUR_MAP["shuffled"]
+    if key in {"unshuffled", "fixed order", "fixed-order"}:
+        return DATASET_COLOUR_MAP["unshuffled"]
+    return None
+
+
 def _split_single_dataset_violin(fig: Any) -> None:
     """Turn a single dataset violin/box trace into one trace per dataset so colours can differ."""
     try:
         if len(fig.data) != 1:
             return
+
         tr = fig.data[0]
-        if getattr(tr, 'type', None) not in {'violin', 'box'}:
+        if getattr(tr, "type", None) not in {"violin", "box"}:
             return
-        x = list(getattr(tr, 'x', []) or [])
-        y = list(getattr(tr, 'y', []) or [])
+
+        x = list(getattr(tr, "x", []) or [])
+        y = list(getattr(tr, "y", []) or [])
         if not x or len(x) != len(y):
             return
+
         x_norm = [_normalise_dataset_token(v) for v in x]
-        wanted = ['Randomised', 'Fixed order']
+        wanted = ["Randomised", "Fixed order"]
         if not any(v in wanted for v in x_norm):
             return
+
         new_traces = []
 
         for ds in wanted:
             idx = [i for i, v in enumerate(x_norm) if v == ds]
             if not idx:
                 continue
+
             xs = [ds] * len(idx)
             ys = [y[i] for i in idx]
             colour = DATASET_COLOUR_MAP.get(ds)
+
             common = dict(
                 x=xs,
                 y=ys,
                 name=ds,
                 legendgroup=ds,
-                box_visible=bool(getattr(tr, 'box', None) and getattr(tr.box, 'visible', False)) or True,
-                meanline_visible=bool(getattr(tr, 'meanline', None) and getattr(tr.meanline, 'visible', False)),
-                points=getattr(tr, 'points', 'outliers'),
-                jitter=getattr(tr, 'jitter', None),
-                pointpos=getattr(tr, 'pointpos', None),
-                opacity=getattr(tr, 'opacity', None) or 0.75,
+                box_visible=bool(getattr(tr, "box", None) and getattr(tr.box, "visible", False)) or True,
+                meanline_visible=bool(getattr(tr, "meanline", None) and getattr(tr.meanline, "visible", False)),
+                points=getattr(tr, "points", "outliers"),
+                jitter=getattr(tr, "jitter", None),
+                pointpos=getattr(tr, "pointpos", None),
+                opacity=getattr(tr, "opacity", None) or 0.75,
                 showlegend=True,
             )
-            if getattr(tr, 'type', None) == 'violin':
+
+            if getattr(tr, "type", None) == "violin":
                 nt = go.Violin(**common)
-                nt.fillcolor = _rgba_from_hex(colour, 0.35)  # type: ignore
+                nt.fillcolor = _rgba_from_hex(colour, 0.35)  # type: ignore[arg-type]
             else:
                 nt = go.Box(**common)
+
             nt.line = dict(color=colour)
             nt.marker = dict(color=colour)
             new_traces.append(nt)
+
         if new_traces:
             fig.data = tuple(new_traces)
+
     except Exception:
         return
 
@@ -257,68 +285,103 @@ def _split_single_dataset_violin(fig: Any) -> None:
 def _sanitise_figure_for_export(fig: Any) -> Any:
     if fig is None:
         return fig
+
     try:
         _split_single_dataset_violin(fig)
     except Exception:
         pass
+
     try:
         for tr in fig.data:
             try:
-                if hasattr(tr, 'name') and isinstance(tr.name, str):
+                if hasattr(tr, "name") and isinstance(tr.name, str):
                     tr.name = _humanise_label(tr.name)
-                if hasattr(tr, 'legendgroup') and isinstance(tr.legendgroup, str):
+
+                if hasattr(tr, "legendgroup") and isinstance(tr.legendgroup, str):
                     tr.legendgroup = _humanise_label(tr.legendgroup)
-                ds_key = None
-                for cand in [getattr(tr, 'name', None), getattr(tr, 'legendgroup', None)]:
-                    if cand in DATASET_COLOUR_MAP:
-                        ds_key = cand
+
+                ds_colour = None
+                for cand in [getattr(tr, "name", None), getattr(tr, "legendgroup", None)]:
+                    ds_colour = _dataset_colour_from_any_label(cand)
+                    if ds_colour is not None:
                         break
-                if ds_key is not None:
-                    colour = DATASET_COLOUR_MAP[ds_key]
-                    if hasattr(tr, 'line'):
-                        tr.line.color = colour
-                    if hasattr(tr, 'marker'):
-                        tr.marker.color = colour
-                    if hasattr(tr, 'fillcolor'):
-                        tr.fillcolor = _rgba_from_hex(colour, 0.20)
-                if hasattr(tr, 'x') and tr.x is not None:
+
+                if ds_colour is not None:
+                    if hasattr(tr, "line") and tr.line is not None:
+                        tr.line.color = ds_colour
+
+                    if hasattr(tr, "marker") and tr.marker is not None:
+                        tr.marker.color = ds_colour
+                        try:
+                            if getattr(tr.marker, "line", None) is not None and getattr(tr.marker.line, "color", None) is None:
+                                tr.marker.line.color = ds_colour
+                        except Exception:
+                            pass
+
+                    if hasattr(tr, "fillcolor"):
+                        # Lighter fill for violins and filled areas
+                        tr.fillcolor = _rgba_from_hex(ds_colour, 0.20)
+
+                if hasattr(tr, "x") and tr.x is not None:
                     tr.x = tuple(_normalise_dataset_token(v) if isinstance(v, str) else v for v in tr.x)
-                if hasattr(tr, 'y') and tr.y is not None and getattr(tr, 'type', None) == 'bar':
+
+                if hasattr(tr, "y") and tr.y is not None and getattr(tr, "type", None) == "bar":
                     tr.y = tuple(_normalise_dataset_token(v) if isinstance(v, str) else v for v in tr.y)
-                if hasattr(tr, 'hovertemplate') and isinstance(tr.hovertemplate, str):
-                    ht = tr.hovertemplate.replace('_', ' ')
-                    ht = ht.replace('unshuffled', 'Fixed order').replace('shuffled', 'Randomised')
+
+                if hasattr(tr, "hovertemplate") and isinstance(tr.hovertemplate, str):
+                    ht = tr.hovertemplate.replace("_", " ")
+                    ht = ht.replace("unshuffled", "Fixed order").replace("shuffled", "Randomised")
+                    ht = ht.replace("Fixed-order", "Fixed order")
                     tr.hovertemplate = ht
+
             except Exception:
                 pass
+
+        # Layout level palette so Plotly Express traces also follow the same order
+        try:
+            fig.update_layout(
+                colorway=[
+                    DATASET_COLOUR_MAP["shuffled"],
+                    DATASET_COLOUR_MAP["unshuffled"],
+                ],
+                legend_title_text="Dataset",
+            )
+        except Exception:
+            pass
+
         # layout titles
         try:
-            if getattr(fig.layout, 'title', None) and isinstance(fig.layout.title.text, str):
+            if getattr(fig.layout, "title", None) and isinstance(fig.layout.title.text, str):
                 fig.layout.title.text = _humanise_label(fig.layout.title.text)
         except Exception:
             pass
+
         for k in dir(fig.layout):
-            if k.startswith('xaxis') or k.startswith('yaxis'):
+            if k.startswith("xaxis") or k.startswith("yaxis"):
                 try:
                     _sanitise_axis_like(getattr(fig.layout, k))
                 except Exception:
                     pass
+
         try:
-            if getattr(fig.layout, 'legend', None) and getattr(fig.layout.legend, 'title', None):
-                txt = getattr(fig.layout.legend.title, 'text', None)
+            if getattr(fig.layout, "legend", None) and getattr(fig.layout.legend, "title", None):
+                txt = getattr(fig.layout.legend.title, "text", None)
                 if isinstance(txt, str):
                     fig.layout.legend.title.text = _humanise_label(txt)
         except Exception:
             pass
+
         try:
-            anns = getattr(fig.layout, 'annotations', None) or []
+            anns = getattr(fig.layout, "annotations", None) or []
             for ann in anns:
-                if hasattr(ann, 'text') and isinstance(ann.text, str):
+                if hasattr(ann, "text") and isinstance(ann.text, str):
                     ann.text = _humanise_label(ann.text)
         except Exception:
             pass
+
     except Exception:
         pass
+
     return fig
 
 
