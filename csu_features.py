@@ -42,6 +42,7 @@ from csu_core import (
     _save_plot,
     _xcorr_max_r_lag,
     _zscore,
+    _humanise_label
 )
 
 # Shared yaw or quaternion column heuristics.
@@ -1214,13 +1215,13 @@ def summarize_and_plot_yaw_results(
     _plot_metric_by_dataset(
         "yaw_sd",
         "Head yaw variability by dataset (participant means)",
-        _pretty_label("yaw_sd"),
+        _humanise_label("yaw_sd"),
         "yaw_sd_by_dataset",
     )
     _plot_metric_by_dataset(
         "yaw_mean",
         "Mean head yaw by dataset (participant means)",
-        _pretty_label("yaw_mean"),
+        _humanise_label("yaw_mean"),
         "yaw_mean_by_dataset",
     )
     _plot_metric_by_dataset(
