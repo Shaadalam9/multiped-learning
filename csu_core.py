@@ -313,7 +313,7 @@ def _sanitise_figure_for_export(fig: Any) -> Any:
                     if hasattr(tr, "marker") and tr.marker is not None:
                         tr.marker.color = ds_colour
                         try:
-                            if getattr(tr.marker, "line", None) is not None and getattr(tr.marker.line, "color", None) is None:
+                            if getattr(tr.marker, "line", None) is not None and getattr(tr.marker.line, "color", None) is None:  # noqa:E501
                                 tr.marker.line.color = ds_colour
                         except Exception:
                             pass

@@ -3,6 +3,8 @@ Entrypoint for the refactored codebase.
 1) Update the six paths below (3 shuffled + 3 unshuffled).
 2) Run:
     python3 analysis.py
+   Force a full rebuild even if a cache exists:
+    python3 analysis.py --reanalyse
 This script always runs:
 - the A to F comparison pipeline
 - the mixed models analysis
@@ -15,9 +17,10 @@ Modules
 - csu_mixed_models.py: mixed models / sensitivity analyses
 """
 from __future__ import annotations
+import argparse
 import os
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Any
 import numpy as np
 import pandas as pd
 import common
@@ -299,7 +302,22 @@ def emit_run_digest(output_root: str = OUTPUT_ROOT) -> None:
     _write_text_report(os.path.join(output_root, "paper_run_digest.txt"), lines)
 
 
-def run_compare() -> None:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Compare shuffled vs unshuffled datasets.")
+    parser.add_argument(
+        "--reanalyse",
+        action="store_true",
+        help="Ignore the cached pickle and rebuild the extracted analysis inputs.",
+    )
+    parser.add_argument(
+        "--cache-path",
+        default=None,
+        help="Optional path for the cached analysis pickle. Defaults to <output_root>/analysis_cache.pkl.",
+    )
+    return parser.parse_args()
+
+
+def run_compare(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str, Any]:
     """Run the A to F comparison pipeline."""
     runner = pipeline.ComparisonPipeline(
         shuffled_data=common.get_configs("shuffled_data"),
@@ -311,7 +329,7 @@ def run_compare() -> None:
         mapping_csv=MAPPING_CSV,
         output_root=OUTPUT_ROOT,
     )
-    runner.run()
+    return runner.run(reanalyse=reanalyse, cache_path=cache_path)
 
 
 def run_mixed(trial_df: Optional[pd.DataFrame] = None) -> None:
@@ -321,10 +339,12 @@ def run_mixed(trial_df: Optional[pd.DataFrame] = None) -> None:
 
 
 if __name__ == "__main__":
-    run_compare()
+    args = parse_args()
+    context = run_compare(reanalyse=args.reanalyse, cache_path=args.cache_path)
     emit_compare_digest()
     try:
-        run_mixed()
+        trial_df = context.get("merged") if isinstance(context, dict) else None
+        run_mixed(trial_df=trial_df if isinstance(trial_df, pd.DataFrame) else None)
         emit_mixed_digest()
     except Exception as e:
         # Mixed models are best effort; keep the overall pipeline usable.

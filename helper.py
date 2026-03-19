@@ -352,13 +352,13 @@ class HMD_helper:
                              range=xaxis_range,
                              dtick=xaxis_step,
                              title_font=dict(family=font_family,
-                                             size=font_size or common.get_configs('font_size'))
+                                             size=common.get_configs('font_size'))
                              )
         else:
             fig.update_xaxes(title_text=xaxis_title,
                              range=xaxis_range,
                              title_font=dict(family=font_family,
-                                             size=font_size or common.get_configs('font_size')))
+                                             size=common.get_configs('font_size')))
 
         # Find the actual y range across all series for tick generation only.
         if all_values:
@@ -392,7 +392,7 @@ class HMD_helper:
             title=dict(
                 text="",
                 font=dict(family=font_family,
-                          size=font_size or common.get_configs('font_size')),
+                          size=common.get_configs('font_size')),
                 standoff=0
             )
         )
@@ -406,7 +406,7 @@ class HMD_helper:
             showarrow=False,
             textangle=-90,
             font=dict(family=font_family,
-                      size=font_size or common.get_configs('font_size')),
+                      size=common.get_configs('font_size')),
             xanchor='center',
             yanchor='middle'
         )
@@ -464,7 +464,7 @@ class HMD_helper:
                                           y=legend_y,
                                           bgcolor='rgba(0,0,0,0)',
                                           font=dict(family=font_family,
-                                                    size=font_size or common.get_configs('font_size') - 6)))
+                                                    size=common.get_configs('font_size') - 6)))
 
         # multiple columns
         elif legend_columns == 2:
@@ -473,7 +473,7 @@ class HMD_helper:
                     x=legend_x,
                     y=legend_y,
                     bgcolor='rgba(0,0,0,0)',
-                    font=dict(size=font_size or common.get_configs('font_size')),
+                    font=dict(size=common.get_configs('font_size')),
                     orientation='h',
                     traceorder='normal',
                     itemwidth=30,
@@ -491,16 +491,10 @@ class HMD_helper:
             fig.update_layout(margin=margin)
 
         # update font family
-        if font_family:
-            fig.update_layout(font=dict(family=font_family))
-        else:
-            fig.update_layout(font=dict(family=common.get_configs('font_family')))
+        fig.update_layout(font=dict(family=common.get_configs('font_family')))
 
         # update font size
-        if font_size:
-            fig.update_layout(font=dict(size=font_size))
-        else:
-            fig.update_layout(font=dict(size=common.get_configs('font_size')))
+        fig.update_layout(font=dict(size=common.get_configs('font_size')))
 
         # save file to local output folder
         if save_file:

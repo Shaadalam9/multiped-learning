@@ -17,6 +17,7 @@ Set these globals before calling `main()` (the entrypoint wrapper does this for 
 from __future__ import annotations
 
 import os
+import pickle
 import re
 from typing import Optional, List, Dict, Tuple, Any
 
@@ -81,6 +82,490 @@ DATASETS: Dict[str, Dict[str, str]] = {}
 MAPPING_CSV: str = "mapping.csv"
 OUTPUT_ROOT: str = "_compare_output"
 logger = CustomLogger(__name__)  # use custom logger
+
+_ANALYSIS_CACHE_VERSION = 1
+_DEFAULT_ANALYSIS_CACHE_NAME = "analysis_cache.pkl"
+
+
+def _resolve_analysis_cache_path(cache_path: Optional[str] = None) -> str:
+    env_path = str(os.environ.get("CSU_ANALYSIS_CACHE", "")).strip()
+    if cache_path:
+        return cache_path
+    if env_path:
+        return env_path
+    return os.path.join(OUTPUT_ROOT, _DEFAULT_ANALYSIS_CACHE_NAME)
+
+
+def _normalise_dataset_config(datasets: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, str]]:
+    out: Dict[str, Dict[str, str]] = {}
+    for label, paths in sorted(datasets.items()):
+        out[label] = {k: os.path.abspath(str(v)) if v else "" for k, v in sorted(paths.items())}
+    return out
+
+
+def _build_analysis_cache_meta() -> Dict[str, Any]:
+    return {
+        "version": _ANALYSIS_CACHE_VERSION,
+        "datasets": _normalise_dataset_config(DATASETS),
+        "mapping_csv": os.path.abspath(MAPPING_CSV),
+    }
+
+
+def _cache_df(value: Any) -> pd.DataFrame:
+    if isinstance(value, pd.DataFrame):
+        return value.copy()
+    return pd.DataFrame()
+
+
+def _cache_df_dict(value: Any) -> Dict[str, pd.DataFrame]:
+    if not isinstance(value, dict):
+        return {}
+    out: Dict[str, pd.DataFrame] = {}
+    for key, df in value.items():
+        if isinstance(df, pd.DataFrame):
+            out[str(key)] = df.copy()
+    return out
+
+
+def _analysis_cache_is_compatible(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    meta = payload.get("_meta")
+    if not isinstance(meta, dict):
+        return False
+    return meta == _build_analysis_cache_meta()
+
+
+def _load_analysis_cache(cache_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    resolved = _resolve_analysis_cache_path(cache_path)
+    if not os.path.exists(resolved):
+        return None
+    try:
+        with open(resolved, "rb") as f:
+            payload = pickle.load(f)
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed reading analysis cache {resolved}: {e}")
+        return None
+
+    if not _analysis_cache_is_compatible(payload):
+        logger.info(f"[CACHE] Existing analysis cache ignored because configuration changed: {resolved}")
+        return None
+
+    logger.info(f"[CACHE] Using cached analysis inputs -> {resolved}")
+    return payload
+
+
+def _save_analysis_cache(payload: Dict[str, Any], cache_path: Optional[str] = None) -> Optional[str]:
+    resolved = _resolve_analysis_cache_path(cache_path)
+    try:
+        parent = os.path.dirname(resolved)
+        if parent:
+            _ensure_dir(parent)
+        to_dump = dict(payload)
+        to_dump["_meta"] = _build_analysis_cache_meta()
+        with open(resolved, "wb") as f:
+            pickle.dump(to_dump, f, protocol=pickle.HIGHEST_PROTOCOL)
+        logger.info(f"[CACHE] Wrote analysis cache -> {resolved}")
+        return resolved
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed writing analysis cache {resolved}: {e}")
+        return None
+
+
+def _write_cached_analysis_outputs(payload: Dict[str, Any], output_root: str) -> None:
+    try:
+        _ensure_dir(output_root)
+
+        features_by_dataset = _cache_df_dict(payload.get("features_by_dataset"))
+        for label, df in features_by_dataset.items():
+            out_dir = os.path.join(output_root, label)
+            _ensure_dir(out_dir)
+            df.to_csv(os.path.join(out_dir, "trigger_trial_features.csv"), index=False)
+
+        yaw_by_dataset = _cache_df_dict(payload.get("yaw_by_dataset"))
+        for label, df in yaw_by_dataset.items():
+            out_dir = os.path.join(output_root, label)
+            _ensure_dir(out_dir)
+            df.to_csv(os.path.join(out_dir, "yaw_trial_features.csv"), index=False)
+
+        all_features = _cache_df(payload.get("all_features"))
+        if not all_features.empty:
+            all_features.to_csv(os.path.join(output_root, "trigger_trial_features_all.csv"), index=False)
+            yaw_cols = [c for c in all_features.columns if str(c).startswith("yaw_")]
+            if yaw_cols:
+                all_features.to_csv(os.path.join(output_root, "trigger_trial_features_all_with_yaw.csv"), index=False)
+
+        yaw_all = payload.get("yaw_all")
+        if isinstance(yaw_all, pd.DataFrame) and not yaw_all.empty:
+            yaw_all.to_csv(os.path.join(output_root, "yaw_trial_features_all.csv"), index=False)
+
+        q_all = payload.get("q_all")
+        if isinstance(q_all, pd.DataFrame) and not q_all.empty:
+            q_all.to_csv(os.path.join(output_root, "trial_q123_all.csv"), index=False)
+
+        merged = payload.get("merged")
+        if isinstance(merged, pd.DataFrame) and not merged.empty:
+            merged.to_csv(os.path.join(output_root, "trigger_trial_features_with_Q123_all.csv"), index=False)
+
+        part_metrics = payload.get("part_metrics")
+        if isinstance(part_metrics, pd.DataFrame) and not part_metrics.empty:
+            part_metrics.to_csv(os.path.join(output_root, "participant_q_behavior_metrics.csv"), index=False)
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed refreshing CSV outputs from cache: {e}")
+
+
+def _prepare_analysis_inputs(mapping: pd.DataFrame, h: HMD_helper, reanalyse: bool = False,
+                             cache_path: Optional[str] = None) -> Dict[str, Any]:
+    if reanalyse:
+        logger.info("[CACHE] Reanalysis requested. Ignoring any existing analysis cache.")
+
+    cached = None if reanalyse else _load_analysis_cache(cache_path)
+    if cached is not None:
+        features_by_dataset = _cache_df_dict(cached.get("features_by_dataset"))
+        all_features = _cache_df(cached.get("all_features"))
+        yaw_all = cached.get("yaw_all") if isinstance(cached.get("yaw_all"), pd.DataFrame) else None
+        q_all = cached.get("q_all") if isinstance(cached.get("q_all"), pd.DataFrame) else None
+        merged = cached.get("merged") if isinstance(cached.get("merged"), pd.DataFrame) else None
+        part_metrics = cached.get("part_metrics") if isinstance(cached.get("part_metrics"), pd.DataFrame) else None
+        _write_cached_analysis_outputs(cached, OUTPUT_ROOT)
+
+        try:
+            extract_selected_questionnaire_values(DATASETS, OUTPUT_ROOT)
+        except Exception as e:
+            logger.error(f"[Q] extraction failed (non-fatal): {e}")
+
+        for ds_name, paths in DATASETS.items():
+            ds_out = os.path.join(OUTPUT_ROOT, ds_name)
+            _ensure_dir(ds_out)
+            _extract_questionnaire_selected_values(
+                dataset=ds_name,
+                intake_path=paths.get("intake_questionnaire"),
+                post_path=paths.get("post_experiment_questionnaire"),
+                out_dir=ds_out,
+            )
+            _summarize_demographics_from_intake(
+                dataset=ds_name,
+                intake_path=paths.get("intake_questionnaire"),
+                features_df=features_by_dataset.get(ds_name),
+                mapping_df=mapping,
+                out_dir=ds_out,
+            )
+
+        if yaw_all is not None and not yaw_all.empty:
+            try:
+                summarize_and_plot_yaw_results(
+                    yaw_df=yaw_all,
+                    mapping_df=mapping,
+                    out_root=OUTPUT_ROOT,
+                    h=h,
+                )
+            except Exception as e:
+                logger.error(f"[YAW] summarize/plot failed (non-fatal): {e}")
+        else:
+            logger.info("[YAW] No cached yaw features found; skipping yaw summaries.")
+
+        if merged is not None and not merged.empty:
+            _latency_missingness_analysis(merged, OUTPUT_ROOT, h)
+
+            if part_metrics is None or part_metrics.empty:
+                part_metrics = compute_participant_q_behavior_metrics(
+                    merged,
+                    group_cols=["yielding", "eHMIOn"],
+                )
+            part_csv = os.path.join(OUTPUT_ROOT, "participant_q_behavior_metrics.csv")
+            part_metrics.to_csv(part_csv, index=False)
+            logger.info(f"Wrote participant Q–behavior metrics -> {part_csv}")
+
+            metric_cols = [c for c in part_metrics.columns if c not in ["dataset", "participant_id"]]
+            comp_part = compare_participant_metrics(part_metrics, metric_cols, fdr=True)
+            comp_csv = os.path.join(OUTPUT_ROOT, "comparison_participant_q_behavior_metrics.csv")
+            comp_part.to_csv(comp_csv, index=False)
+            logger.info(f"Wrote participant-metric comparison -> {comp_csv}")
+            _print_table(comp_part, title="Top participant-level Q–behavior differences (sorted by p/q)", max_rows=15)
+
+            if go is not None and "trial_index" in merged.columns:
+                try:
+                    if "yielding" in merged.columns:
+                        _plot_factor_drift_by_trial_index(
+                            merged,
+                            factor_col="yielding",
+                            title="Yielding proportion by trial index",
+                            name="factor_drift_yielding_over_trial_index",
+                            h=h,
+                        )
+                    if "eHMIOn" in merged.columns:
+                        _plot_factor_drift_by_trial_index(
+                            merged,
+                            factor_col="eHMIOn",
+                            title="eHMI-on proportion by trial index",
+                            name="factor_drift_eHMIOn_over_trial_index",
+                            h=h,
+                        )
+                except Exception as e:
+                    logger.error(f"[plot] factor drift plotting failed: {e}")
+        else:
+            logger.warning("[Q123] No cached merged trial table available; skipping Q–behavior metrics.")
+
+        return {
+            "cache_path": _resolve_analysis_cache_path(cache_path),
+            "features_by_dataset": features_by_dataset,
+            "all_features": all_features,
+            "yaw_all": yaw_all,
+            "q_all": q_all,
+            "merged": merged,
+            "part_metrics": part_metrics,
+        }
+
+    try:
+        extract_selected_questionnaire_values(DATASETS, OUTPUT_ROOT)
+    except Exception as e:
+        logger.error(f"[Q] extraction failed (non-fatal): {e}")
+
+    feature_dfs: List[pd.DataFrame] = []
+    features_by_dataset: Dict[str, pd.DataFrame] = {}
+    merged = None
+    part_metrics = None
+    yaw_all = None
+    q_all = None
+    yaw_by_dataset: Dict[str, pd.DataFrame] = {}
+
+    for label, paths in DATASETS.items():
+        out_dir = os.path.join(OUTPUT_ROOT, label)
+        _ensure_dir(out_dir)
+
+        out_csv = os.path.join(out_dir, "trigger_trial_features.csv")
+        df = compute_trigger_features_dataset(
+            data_folder=paths["data"],
+            mapping_df=mapping,
+            out_csv=out_csv,
+            dataset_label=label,
+            trigger_col="TriggerValueRight",
+            time_col="Timestamp",
+            thresholds=(0.10, 0.30, 0.50),
+            analysis_window="crossing",
+        )
+        logger.info(f"{label}: extracted {len(df)} participant×trial rows -> {out_csv}")
+        features_by_dataset[label] = df
+        if not df.empty:
+            feature_dfs.append(df)
+
+    if not feature_dfs:
+        logger.warning("No features extracted. Check your paths and filename matching.")
+        return {
+            "cache_path": _resolve_analysis_cache_path(cache_path),
+            "features_by_dataset": features_by_dataset,
+            "all_features": pd.DataFrame(),
+            "yaw_all": yaw_all,
+            "q_all": q_all,
+            "merged": merged,
+            "part_metrics": part_metrics,
+        }
+
+    all_features = pd.concat(feature_dfs, ignore_index=True)
+    all_csv = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all.csv")
+    all_features.to_csv(all_csv, index=False)
+    logger.info(f"Wrote combined features -> {all_csv}")
+
+    for ds_name, paths in DATASETS.items():
+        ds_out = os.path.join(OUTPUT_ROOT, ds_name)
+        _ensure_dir(ds_out)
+
+        _extract_questionnaire_selected_values(
+            dataset=ds_name,
+            intake_path=paths.get("intake_questionnaire"),
+            post_path=paths.get("post_experiment_questionnaire"),
+            out_dir=ds_out,
+        )
+
+        _summarize_demographics_from_intake(
+            dataset=ds_name,
+            intake_path=paths.get("intake_questionnaire"),
+            features_df=features_by_dataset.get(ds_name),
+            mapping_df=mapping,
+            out_dir=ds_out,
+        )
+
+    yaw_dfs: List[pd.DataFrame] = []
+    for label, paths in DATASETS.items():
+        out_yaw_csv = os.path.join(OUTPUT_ROOT, label, "yaw_trial_features.csv")
+        ydf = compute_yaw_features_dataset(
+            data_folder=paths["data"],
+            mapping_df=mapping,
+            dataset_label=label,
+            out_csv=out_yaw_csv,
+            time_col="Timestamp",
+            trigger_col="TriggerValueRight",
+        )
+        if ydf is not None and (not ydf.empty):
+            logger.info(f"{label}: extracted {len(ydf)} yaw participant×trial rows -> {out_yaw_csv}")
+            yaw_dfs.append(ydf)
+            yaw_by_dataset[label] = ydf
+
+    if yaw_dfs:
+        yaw_all = pd.concat(yaw_dfs, ignore_index=True)
+        yaw_all_csv = os.path.join(OUTPUT_ROOT, "yaw_trial_features_all.csv")
+        yaw_all.to_csv(yaw_all_csv, index=False)
+        logger.info(f"Wrote yaw features -> {yaw_all_csv}")
+
+        key_cols = ["dataset", "participant_id", "video_id"]
+        if all(c in all_features.columns for c in key_cols) and all(c in yaw_all.columns for c in key_cols):
+            overlap = [c for c in yaw_all.columns if (c in all_features.columns) and (c not in key_cols)]
+            yaw_merge = yaw_all.drop(columns=overlap, errors="ignore")
+            all_features = all_features.merge(yaw_merge, on=key_cols, how="left")
+            all_csv2 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all_with_yaw.csv")
+            all_features.to_csv(all_csv2, index=False)
+            logger.info(f"Wrote combined trigger+yaw features -> {all_csv2}")
+        else:
+            logger.warning("[YAW] Could not merge yaw features (missing keys).")
+
+        logger.info("\n=== Yaw ↔ trigger pooled correlations by dataset (trial-level) ===")
+        yaw_abs_col = _pick_col(all_features, ["yaw_abs_mean"])
+        yaw_fwd_col = _pick_col(all_features, ["yaw_forward_frac_15", "yaw_forward_frac_10"])
+        trig_mean_col = _pick_col(all_features, ["trigger_mean", "avg_trigger", "mean_trigger"])
+        unsafe_col = _pick_col(all_features, ["frac_time_unsafe", "unsafe_time_frac", "frac_unsafe"])
+        if yaw_abs_col and trig_mean_col:
+            for ds, g in all_features.groupby("dataset"):
+                r = _safe_corr(g[yaw_abs_col], g[trig_mean_col], min_n=10)
+                logger.info(f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: n/a")
+        if yaw_fwd_col and unsafe_col:
+            for ds, g in all_features.groupby("dataset"):
+                r = _safe_corr(g[yaw_fwd_col], g[unsafe_col], min_n=10)
+                logger.info(f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: n/a")
+
+        try:
+            summarize_and_plot_yaw_results(
+                yaw_df=yaw_all,
+                mapping_df=mapping,
+                out_root=OUTPUT_ROOT,
+                h=h,
+            )
+        except Exception as e:
+            logger.error(f"[YAW] summarize/plot failed (non-fatal): {e}")
+    else:
+        yaw_all_csv = os.path.join(OUTPUT_ROOT, "yaw_trial_features_all.csv")
+        if os.path.exists(yaw_all_csv):
+            try:
+                yaw_all = pd.read_csv(yaw_all_csv)
+                logger.info(f"[YAW] Re-using existing yaw features -> {yaw_all_csv} (rows={len(yaw_all)})")
+                if not yaw_all.empty and "dataset" in yaw_all.columns:
+                    yaw_by_dataset = {str(ds): g.copy() for ds, g in yaw_all.groupby("dataset")}
+
+                key_cols = ["dataset", "participant_id", "video_id"]
+                if all(c in all_features.columns for c in key_cols) and all(c in yaw_all.columns for c in key_cols):
+                    overlap = [c for c in yaw_all.columns if (c in all_features.columns) and (c not in key_cols)]
+                    yaw_merge = yaw_all.drop(columns=overlap, errors="ignore")
+                    all_features = all_features.merge(yaw_merge, on=key_cols, how="left")
+                    all_csv2 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all_with_yaw.csv")
+                    all_features.to_csv(all_csv2, index=False)
+                    logger.info(f"[YAW] Wrote combined trigger+yaw features -> {all_csv2}")
+
+                try:
+                    summarize_and_plot_yaw_results(
+                        yaw_df=yaw_all,
+                        mapping_df=mapping,
+                        out_root=OUTPUT_ROOT,
+                        h=h,
+                    )
+                except Exception as e:
+                    logger.error(f"[YAW] summarize/plot failed (non-fatal): {e}")
+            except Exception as e:
+                logger.error(f"[YAW] Existing yaw features file found but could not be read: {yaw_all_csv} ({e})")
+        else:
+            logger.error("[YAW] No yaw columns found in time-series CSVs; skipping yaw features.")
+
+    q_dfs: List[pd.DataFrame] = []
+    for label, paths in DATASETS.items():
+        qdf = load_trial_q123_from_responses(
+            responses_root=paths["data"],
+            dataset_label=label,
+            response_col_index=2,
+        )
+        if qdf is None or qdf.empty:
+            logger.info(f"[Q123] {label}: no Q1/Q2/Q3 trial data found (skipping).")
+        else:
+            logger.info(f"[Q123] {label}: loaded {len(qdf)} Q123 trial rows")
+            q_dfs.append(qdf)
+
+    if q_dfs:
+        q_all = pd.concat(q_dfs, ignore_index=True)
+
+        merged = all_features.merge(
+            q_all,
+            on=["dataset", "participant_id", "video_id"],
+            how="left",
+        )
+        merged_csv = os.path.join(OUTPUT_ROOT, "trigger_trial_features_with_Q123_all.csv")
+        merged.to_csv(merged_csv, index=False)
+        logger.info(f"Wrote trigger+Q trial table -> {merged_csv}")
+
+        _latency_missingness_analysis(merged, OUTPUT_ROOT, h)
+
+        part_metrics = compute_participant_q_behavior_metrics(
+            merged,
+            group_cols=["yielding", "eHMIOn"],
+        )
+        part_csv = os.path.join(OUTPUT_ROOT, "participant_q_behavior_metrics.csv")
+        part_metrics.to_csv(part_csv, index=False)
+        logger.info(f"Wrote participant Q–behavior metrics -> {part_csv}")
+
+        key_pm = [c for c in [
+            "Q3_within_group_sd_mean",
+            "Q3_sd_late_minus_early",
+            "Q3_iqr_late_minus_early",
+            "dissoc_mean_abs_z_Q2_minus_unsafe",
+            "z_corr_Q3_volatility",
+            "z_corr_Q3_transitions",
+            "z_corr_Q3_release_yielding",
+        ] if c in part_metrics.columns]
+        if key_pm:
+            desc = part_metrics.groupby("dataset")[key_pm].agg(["count", "mean", "std"])
+            logger.info("\nParticipant-metric descriptives (count/mean/std) for key metrics:")
+            with pd.option_context("display.width", 160):
+                logger.info(desc.to_string())
+
+        metric_cols = [c for c in part_metrics.columns if c not in ["dataset", "participant_id"]]
+        comp_part = compare_participant_metrics(part_metrics, metric_cols, fdr=True)
+        comp_csv = os.path.join(OUTPUT_ROOT, "comparison_participant_q_behavior_metrics.csv")
+        comp_part.to_csv(comp_csv, index=False)
+        logger.info(f"Wrote participant-metric comparison -> {comp_csv}")
+        _print_table(comp_part, title="Top participant-level Q–behavior differences (sorted by p/q)", max_rows=15)
+
+        if go is not None and "trial_index" in merged.columns:
+            try:
+                if "yielding" in merged.columns:
+                    _plot_factor_drift_by_trial_index(
+                        merged,
+                        factor_col="yielding",
+                        title="Yielding proportion by trial index",
+                        name="factor_drift_yielding_over_trial_index",
+                        h=h,
+                    )
+                if "eHMIOn" in merged.columns:
+                    _plot_factor_drift_by_trial_index(
+                        merged,
+                        factor_col="eHMIOn",
+                        title="eHMI-on proportion by trial index",
+                        name="factor_drift_eHMIOn_over_trial_index",
+                        h=h,
+                    )
+            except Exception as e:
+                logger.error(f"[plot] factor drift plotting failed: {e}")
+    else:
+        logger.warning("[Q123] No Q1/Q2/Q3 data found in participant response folders; skipping Q–behavior metrics.")
+
+    payload = {
+        "features_by_dataset": features_by_dataset,
+        "yaw_by_dataset": yaw_by_dataset,
+        "all_features": all_features,
+        "yaw_all": yaw_all,
+        "q_all": q_all,
+        "merged": merged,
+        "part_metrics": part_metrics,
+    }
+    _save_analysis_cache(payload, cache_path=cache_path)
+
+    payload["cache_path"] = _resolve_analysis_cache_path(cache_path)
+    return payload
 
 
 INTAKE_COLUMNS_CATEGORICAL = [
@@ -1925,262 +2410,24 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
         logger.error(f"[Missingness] plotting failed: {e}")
 
 
-def main() -> None:
+def main(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str, Any]:
     _ensure_dir(OUTPUT_ROOT)
-    # ------------------------------------------------------------
-    # A0) Questionnaire extraction (selected columns; values only)
-    # ------------------------------------------------------------
-    try:
-        extract_selected_questionnaire_values(DATASETS, OUTPUT_ROOT)
-    except Exception as e:
-        logger.error(f"[Q] extraction failed (non-fatal): {e}")
-
     mapping = pd.read_csv(MAPPING_CSV)
 
     # Plotting helper (used throughout; must be defined before any _save_plot calls)
     h = HMD_helper()
 
-    feature_dfs = []
-    features_by_dataset = {}
-    merged = None  # trigger + Q1/Q2/Q3 trial table
-    part_metrics = None  # participant-level Q-behavior metrics
+    prepared = _prepare_analysis_inputs(mapping=mapping, h=h, reanalyse=reanalyse, cache_path=cache_path)
+    all_features = _cache_df(prepared.get("all_features"))
+    merged = prepared.get("merged") if isinstance(prepared.get("merged"), pd.DataFrame) else None
+    part_metrics = prepared.get("part_metrics") if isinstance(prepared.get("part_metrics"), pd.DataFrame) else None
 
-    for label, paths in DATASETS.items():
-        out_dir = os.path.join(OUTPUT_ROOT, label)
-        _ensure_dir(out_dir)
-
-        out_csv = os.path.join(out_dir, "trigger_trial_features.csv")
-        df = compute_trigger_features_dataset(
-            data_folder=paths["data"],
-            mapping_df=mapping,
-            out_csv=out_csv,
-            dataset_label=label,
-            trigger_col="TriggerValueRight",
-            time_col="Timestamp",
-            thresholds=(0.10, 0.30, 0.50),
-            analysis_window="crossing",
-        )
-        logger.info(f"{label}: extracted {len(df)} participant×trial rows -> {out_csv}")
-        features_by_dataset[label] = df
-        if not df.empty:
-            feature_dfs.append(df)
-
-    if not feature_dfs:
+    if all_features.empty:
         logger.warning("No features extracted. Check your paths and filename matching.")
-        return
-
-    all_features = pd.concat(feature_dfs, ignore_index=True)
-    all_csv = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all.csv")
-    all_features.to_csv(all_csv, index=False)
-    logger.info(f"Wrote combined features -> {all_csv}")
-
-    # ----------------------
-    # Questionnaires: selected values (no plots) + demographics summary (printed)
-    # ----------------------
-    for ds_name, paths in DATASETS.items():
-        ds_out = os.path.join(OUTPUT_ROOT, ds_name)
-        _ensure_dir(ds_out)
-
-        _extract_questionnaire_selected_values(
-            dataset=ds_name,
-            intake_path=paths.get("intake_questionnaire"),
-            post_path=paths.get("post_experiment_questionnaire"),
-            out_dir=ds_out,
-        )
-
-        _summarize_demographics_from_intake(
-            dataset=ds_name,
-            intake_path=paths.get("intake_questionnaire"),
-            features_df=features_by_dataset.get(ds_name),
-            mapping_df=mapping,
-            out_dir=ds_out,
-        )
-
-    # ----------------------
-    # Yaw/head-orientation features (optional, trial-level)
-    # ----------------------
-    yaw_dfs = []
-    for label, paths in DATASETS.items():
-        out_yaw_csv = os.path.join(OUTPUT_ROOT, label, "yaw_trial_features.csv")
-        ydf = compute_yaw_features_dataset(
-            data_folder=paths["data"],
-            mapping_df=mapping,
-            dataset_label=label,
-            out_csv=out_yaw_csv,
-            time_col="Timestamp",
-            trigger_col="TriggerValueRight",
-        )
-        if ydf is not None and (not ydf.empty):
-            logger.info(f"{label}: extracted {len(ydf)} yaw participant×trial rows -> {out_yaw_csv}")
-            yaw_dfs.append(ydf)
-
-    if yaw_dfs:
-        yaw_all = pd.concat(yaw_dfs, ignore_index=True)
-        yaw_all_csv = os.path.join(OUTPUT_ROOT, "yaw_trial_features_all.csv")
-        yaw_all.to_csv(yaw_all_csv, index=False)
-        logger.info(f"Wrote yaw features -> {yaw_all_csv}")
-
-        key_cols = ["dataset", "participant_id", "video_id"]
-        if all(c in all_features.columns for c in key_cols) and all(c in yaw_all.columns for c in key_cols):
-            # Avoid clobbering / suffixing design columns (e.g., condition_name) that already exist in trigger features.  # noqa: E501
-            overlap = [c for c in yaw_all.columns if (c in all_features.columns) and (c not in key_cols)]
-            yaw_merge = yaw_all.drop(columns=overlap, errors="ignore")
-            all_features = all_features.merge(yaw_merge, on=key_cols, how="left")
-            all_csv2 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all_with_yaw.csv")
-            all_features.to_csv(all_csv2, index=False)
-            logger.info(f"Wrote combined trigger+yaw features -> {all_csv2}")
-        else:
-            logger.warning("[YAW] Could not merge yaw features (missing keys).")
-
-        logger.info("\n=== Yaw ↔ trigger pooled correlations by dataset (trial-level) ===")
-        yaw_abs_col = _pick_col(all_features, ["yaw_abs_mean"])
-        yaw_fwd_col = _pick_col(all_features, ["yaw_forward_frac_15", "yaw_forward_frac_10"])
-        trig_mean_col = _pick_col(all_features, ["trigger_mean", "avg_trigger", "mean_trigger"])
-        unsafe_col = _pick_col(all_features, ["frac_time_unsafe", "unsafe_time_frac", "frac_unsafe"])
-        if yaw_abs_col and trig_mean_col:
-            for ds, g in all_features.groupby("dataset"):
-                r = _safe_corr(g[yaw_abs_col], g[trig_mean_col], min_n=10)
-                logger.info(f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: n/a")  # noqa: E501
-        if yaw_fwd_col and unsafe_col:
-            for ds, g in all_features.groupby("dataset"):
-                r = _safe_corr(g[yaw_fwd_col], g[unsafe_col], min_n=10)
-                logger.info(f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: n/a")  # noqa: E501
-
-        # Yaw-focused reporting tables + plots
-        try:
-            summarize_and_plot_yaw_results(
-                yaw_df=yaw_all,
-                mapping_df=mapping,
-                out_root=OUTPUT_ROOT,
-                h=h,
-            )
-        except Exception as e:
-            logger.error(f"[YAW] summarize/plot failed (non-fatal): {e}")
-    else:
-        # Fallback: if yaw features were computed in an earlier run, reuse them so yaw summaries/plots are still produced.  # noqa: E501
-        yaw_all_csv = os.path.join(OUTPUT_ROOT, "yaw_trial_features_all.csv")
-        if os.path.exists(yaw_all_csv):
-            try:
-                yaw_all = pd.read_csv(yaw_all_csv)
-                logger.info(f"[YAW] Re-using existing yaw features -> {yaw_all_csv} (rows={len(yaw_all)})")
-
-                # Try merging into the current trigger table if needed (best effort).
-                key_cols = ["dataset", "participant_id", "video_id"]
-                if all(c in all_features.columns for c in key_cols) and all(c in yaw_all.columns for c in key_cols):
-                    overlap = [c for c in yaw_all.columns if (c in all_features.columns) and (c not in key_cols)]
-                    yaw_merge = yaw_all.drop(columns=overlap, errors="ignore")
-                    all_features = all_features.merge(yaw_merge, on=key_cols, how="left")
-                    all_csv2 = os.path.join(OUTPUT_ROOT, "trigger_trial_features_all_with_yaw.csv")
-                    all_features.to_csv(all_csv2, index=False)
-                    logger.info(f"[YAW] Wrote combined trigger+yaw features -> {all_csv2}")
-
-                try:
-                    summarize_and_plot_yaw_results(
-                        yaw_df=yaw_all,
-                        mapping_df=mapping,
-                        out_root=OUTPUT_ROOT,
-                        h=h,
-                    )
-                except Exception as e:
-                    logger.error(f"[YAW] summarize/plot failed (non-fatal): {e}")
-            except Exception as e:
-                logger.error(f"[YAW] Existing yaw features file found but could not be read: {yaw_all_csv} ({e})")
-        else:
-            logger.error("[YAW] No yaw columns found in time-series CSVs; skipping yaw features.")
+        return prepared
 
     _print_dataset_overview(all_features)
     _print_metric_descriptives(all_features, PLOT_METRICS)
-
-    # ----------------------
-    # Q1–Q3 trial responses + derived participant metrics
-    # ----------------------
-    q_dfs = []
-    for label, paths in DATASETS.items():
-        qdf = load_trial_q123_from_responses(
-            responses_root=paths["data"],
-            dataset_label=label,
-            response_col_index=2,  # Q2 is in the middle by default
-        )
-        if qdf is None or qdf.empty:
-            logger.info(f"[Q123] {label}: no Q1/Q2/Q3 trial data found (skipping).")
-        else:
-            logger.info(f"[Q123] {label}: loaded {len(qdf)} Q123 trial rows")
-            q_dfs.append(qdf)
-
-    if q_dfs:
-        q_all = pd.concat(q_dfs, ignore_index=True)
-
-        merged = all_features.merge(
-            q_all,
-            on=["dataset", "participant_id", "video_id"],
-            how="left",
-        )
-        merged_csv = os.path.join(OUTPUT_ROOT, "trigger_trial_features_with_Q123_all.csv")
-        merged.to_csv(merged_csv, index=False)
-        logger.info(f"Wrote trigger+Q trial table -> {merged_csv}")
-
-        # Missingness mechanism analysis for latency metrics (press/release)
-        _latency_missingness_analysis(merged, OUTPUT_ROOT, h)
-
-        part_metrics = compute_participant_q_behavior_metrics(
-            merged,
-            group_cols=["yielding", "eHMIOn"],
-        )
-        part_csv = os.path.join(OUTPUT_ROOT, "participant_q_behavior_metrics.csv")
-        part_metrics.to_csv(part_csv, index=False)
-        logger.info(f"Wrote participant Q–behavior metrics -> {part_csv}")
-
-        # quick descriptives for a few high-signal participant metrics
-        key_pm = [c for c in [
-            "Q3_within_group_sd_mean",
-            "Q3_sd_late_minus_early",
-            "Q3_iqr_late_minus_early",
-            "dissoc_mean_abs_z_Q2_minus_unsafe",
-            "z_corr_Q3_volatility",
-            "z_corr_Q3_transitions",
-            "z_corr_Q3_release_yielding",
-        ] if c in part_metrics.columns]
-        if key_pm:
-            desc = part_metrics.groupby("dataset")[key_pm].agg(["count", "mean", "std"])
-            logger.info("\nParticipant-metric descriptives (count/mean/std) for key metrics:")
-            with pd.option_context("display.width", 160):
-                logger.info(desc.to_string())
-
-        metric_cols = [c for c in part_metrics.columns if c not in ["dataset", "participant_id"]]
-        comp_part = compare_participant_metrics(part_metrics, metric_cols, fdr=True)
-        comp_csv = os.path.join(OUTPUT_ROOT, "comparison_participant_q_behavior_metrics.csv")
-        comp_part.to_csv(comp_csv, index=False)
-        logger.info(f"Wrote participant-metric comparison -> {comp_csv}")
-        _print_table(comp_part, title="Top participant-level Q–behavior differences (sorted by p/q)", max_rows=15)
-
-        # ----------------------
-        # C. Factor drift plots (design confounding fingerprint)
-        # ----------------------
-        # These are *not* outcome drift; they visualize how the experimental factors
-        # themselves vary across trial_index in the fixed-order dataset.
-        if go is not None and "trial_index" in merged.columns:
-            try:
-                if "yielding" in merged.columns:
-                    _plot_factor_drift_by_trial_index(
-                        merged,
-                        factor_col="yielding",
-                        title="Yielding proportion by trial index",
-                        name="factor_drift_yielding_over_trial_index",
-                        h=h,
-                    )
-                if "eHMIOn" in merged.columns:
-                    _plot_factor_drift_by_trial_index(
-                        merged,
-                        factor_col="eHMIOn",
-                        title="eHMI-on proportion by trial index",
-                        name="factor_drift_eHMIOn_over_trial_index",
-                        h=h,
-                    )
-            except Exception as e:
-                logger.error(f"[plot] factor drift plotting failed: {e}")
-
-    else:
-        logger.warning("[Q123] No Q1/Q2/Q3 data found in participant response folders; skipping Q–behavior metrics.")
 
     # ----------------------
     # E. Learning / expectation / sequential effects
@@ -2313,9 +2560,9 @@ def main() -> None:
                             fig = px.violin(
                                 part_break,
                                 x="dataset",
-                color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                                color="dataset",
+                                color_discrete_map=DATASET_COLOR_MAP,
+                                category_orders={"dataset": ["shuffled", "unshuffled"]},
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2351,9 +2598,9 @@ def main() -> None:
                             fig = px.violin(
                                 part_E,
                                 x="dataset",
-                color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                                color="dataset",
+                                color_discrete_map=DATASET_COLOR_MAP,
+                                category_orders={"dataset": ["shuffled", "unshuffled"]},
                                 y=mc,
                                 box=True,
                                 points="all",
@@ -2371,8 +2618,8 @@ def main() -> None:
                         x="bin_center",
                         y="y_mean",
                         color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                        color_discrete_map=DATASET_COLOR_MAP,
+                        category_orders={"dataset": ["shuffled", "unshuffled"]},
                         error_y="sem",
                     )
                     fig.update_layout(
@@ -2461,15 +2708,23 @@ def main() -> None:
         fig = px.violin(
             all_features,
             x="dataset",
-                color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+            color="dataset",
+            color_discrete_map=DATASET_COLOR_MAP,
+            category_orders={"dataset": ["shuffled", "unshuffled"]},
             y=metric,
             box=True,
             points="outliers",
             hover_data=["participant_id", "video_id", "condition_name"],
         )
-        fig.update_layout(title=f"{metric}: shuffled vs unshuffled")
+        fig.update_layout(
+            title="",
+            legend=dict(
+                x=0.085,
+                y=1.0,
+                xanchor="left",
+                yanchor="top"
+            )
+        )
 
         # Saved to common.get_configs("output") (and optionally the final-figure folder)
         _save_plot(h, fig, name=f"compare_violin_{metric}")
@@ -2650,9 +2905,9 @@ def main() -> None:
                 fig = px.violin(
                     all_features,
                     x="dataset",
-                color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                    color="dataset",
+                    color_discrete_map=DATASET_COLOR_MAP,
+                    category_orders={"dataset": ["shuffled", "unshuffled"]},
                     y=m,
                     box=True,
                     points="outliers",
@@ -2669,31 +2924,41 @@ def main() -> None:
             if "yaw_abs_mean" in all_features.columns and trig_mean_col is not None:
                 fig = px.scatter(all_features, x="yaw_abs_mean", y=trig_mean_col,
                                  color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
+                                 color_discrete_map=DATASET_COLOR_MAP,
+                                 category_orders={"dataset": ["shuffled", "unshuffled"]},
+                                 hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_abs_mean vs {trig_mean_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_abs_mean_vs_{trig_mean_col}")
 
             if "yaw_forward_frac_15" in all_features.columns and unsafe_col is not None:
-                fig = px.scatter(all_features, x="yaw_forward_frac_15", y=unsafe_col,
+                fig = px.scatter(all_features, x="yaw_forward_frac_15",
+                                 y=unsafe_col,
                                  color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
+                                 color_discrete_map=DATASET_COLOR_MAP,
+                                 category_orders={"dataset": ["shuffled", "unshuffled"]},
+                                 hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_forward_frac_15 vs {unsafe_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_forward_frac_15_vs_{unsafe_col}")
 
             if "yaw_speed_mean" in all_features.columns and ramp_col is not None:
-                fig = px.scatter(all_features, x="yaw_speed_mean", y=ramp_col, color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
+                fig = px.scatter(all_features,
+                                 x="yaw_speed_mean",
+                                 y=ramp_col,
+                                 color="dataset",
+                                 color_discrete_map=DATASET_COLOR_MAP,
+                                 category_orders={"dataset": ["shuffled", "unshuffled"]},
+                                 hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_speed_mean vs {ramp_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_speed_mean_vs_{ramp_col}")
 
             if "yaw_speed_pre_press_mean_1s" in all_features.columns and press_lat_col is not None:
-                fig = px.scatter(all_features, x="yaw_speed_pre_press_mean_1s", y=press_lat_col,
+                fig = px.scatter(all_features,
+                                 x="yaw_speed_pre_press_mean_1s",
+                                 y=press_lat_col,
                                  color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
+                                 color_discrete_map=DATASET_COLOR_MAP,
+                                 category_orders={"dataset": ["shuffled", "unshuffled"]},
+                                 hover_data=hover_cols2)
                 fig.update_layout(title=f"yaw_speed_pre_press_mean_1s vs {press_lat_col} (trial-level)")
                 _save_plot(h, fig, name=f"scatter_yaw_speed_pre_press_mean_1s_vs_{press_lat_col}")
 
@@ -2706,9 +2971,13 @@ def main() -> None:
                     r = _safe_corr(pd.to_numeric(g["yaw_sd"], errors="coerce"),
                                    pd.to_numeric(g[vol_col2], errors="coerce"), min_n=10)
                     logger.info(f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_sd, {vol_col2}) in {ds}: n/a")  # noqa: E501
-                fig = px.scatter(all_features, x="yaw_sd", y=vol_col2, color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]}, hover_data=hover_cols2)
+                fig = px.scatter(all_features,
+                                 x="yaw_sd",
+                                 y=vol_col2,
+                                 color="dataset",
+                                 color_discrete_map=DATASET_COLOR_MAP,
+                                 category_orders={"dataset": ["shuffled", "unshuffled"]},
+                                 hover_data=hover_cols2)
                 fig.update_layout(title=f"Trial-level coupling: yaw_sd vs {vol_col2}")
                 _save_plot(h, fig, name=f"scatter_yaw_sd_vs_{vol_col2}")
 
@@ -2717,9 +2986,12 @@ def main() -> None:
                     r = _safe_corr(pd.to_numeric(g["yaw_forward_frac_15"], errors="coerce"),
                                    pd.to_numeric(g["Q3"], errors="coerce"), min_n=10)
                     logger.info(f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr(yaw_forward_frac_15, Q3) in {ds}: n/a")  # noqa: E501
-                fig = px.scatter(all_features, x="yaw_forward_frac_15", y="Q3", color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                fig = px.scatter(all_features,
+                                 x="yaw_forward_frac_15",
+                                 y="Q3",
+                                 color="dataset",
+                                 color_discrete_map=DATASET_COLOR_MAP,
+                                 category_orders={"dataset": ["shuffled", "unshuffled"]},
                                  hover_data=hover_cols2)
                 fig.update_layout(title="Trial-level coupling: yaw_forward_frac_15 vs Q3 (understanding)")
                 _save_plot(h, fig, name="scatter_yaw_forward_frac_15_vs_Q3")
@@ -2753,9 +3025,9 @@ def main() -> None:
                     fig = px.violin(
                         all_features,
                         x="dataset",
-                color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                        color="dataset",
+                        color_discrete_map=DATASET_COLOR_MAP,
+                        category_orders={"dataset": ["shuffled", "unshuffled"]},
                         y=c,
                         box=True,
                         points="outliers",
@@ -2914,8 +3186,8 @@ def main() -> None:
                             x=mcol,
                             y=ocol,
                             color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                            color_discrete_map=DATASET_COLOR_MAP,
+                            category_orders={"dataset": ["shuffled", "unshuffled"]},
                             hover_data=hoverP,
                         )
                         fig.update_layout(title=f"Moderator: {mcol} vs {ocol}")
@@ -2944,8 +3216,8 @@ def main() -> None:
                         x="group",
                         y=ocol,
                         color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                        color_discrete_map=DATASET_COLOR_MAP,
+                        category_orders={"dataset": ["shuffled", "unshuffled"]},
                         box=True,
                         points="all",
                         hover_data=["participant_id"],
@@ -3060,8 +3332,8 @@ def main() -> None:
                     x="fpr",
                     y="tpr",
                     color="dataset",
-                color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                    color_discrete_map=DATASET_COLOR_MAP,
+                    category_orders={"dataset": ["shuffled", "unshuffled"]},
                     line_dash="signal",
                     hover_data=["auc"],
                 )
@@ -3146,9 +3418,9 @@ class ComparisonPipeline:
         self.mapping_csv = mapping_csv
         self.output_root = output_root
 
-    def run(self) -> None:
+    def run(self, reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str, Any]:
         global DATASETS, MAPPING_CSV, OUTPUT_ROOT
         DATASETS = self.datasets
         MAPPING_CSV = self.mapping_csv
         OUTPUT_ROOT = self.output_root
-        main()
+        return main(reanalyse=reanalyse, cache_path=cache_path)

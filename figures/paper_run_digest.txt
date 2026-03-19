@@ -1,8 +1,0 @@
-
-=== [Paper] Run artefacts ===
-[Paper] generated at 2026-03-09 12:25:44
-[Paper] paper_compare_digest.txt: _output/paper_compare_digest.txt
-[Paper] paper_compare_digest_top_rows.csv: _output/paper_compare_digest_top_rows.csv
-[Paper] paper_mixed_digest.txt: _output/paper_mixed_digest.txt
-[Paper] paper_mixed_digest_top_rows.csv: _output/paper_mixed_digest_top_rows.csv
-[Paper] between_subject_balance_report.txt: _output/between_subject_balance_report.txt
