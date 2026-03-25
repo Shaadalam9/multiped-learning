@@ -81,6 +81,124 @@ def _resolve_data_folder(dataset: Optional[str] = None) -> str:
             return v
     return ""
 
+_LEGEND_LOCATION_PRESETS = {
+    "top_right": {"x": 0.99, "y": 0.99, "xanchor": "right", "yanchor": "top"},
+    "top_left": {"x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top"},
+    "top_center": {"x": 0.50, "y": 0.99, "xanchor": "center", "yanchor": "top"},
+    "bottom_right": {"x": 0.99, "y": 0.01, "xanchor": "right", "yanchor": "bottom"},
+    "bottom_left": {"x": 0.01, "y": 0.01, "xanchor": "left", "yanchor": "bottom"},
+    "bottom_center": {"x": 0.50, "y": 0.01, "xanchor": "center", "yanchor": "bottom"},
+    "right_center": {"x": 0.99, "y": 0.50, "xanchor": "right", "yanchor": "middle"},
+    "left_center": {"x": 0.01, "y": 0.50, "xanchor": "left", "yanchor": "middle"},
+    "outside_right": {"x": 1.02, "y": 0.99, "xanchor": "left", "yanchor": "top"},
+}
+
+
+def _coerce_int_config(value, default: int) -> int:
+    try:
+        return int(value)
+    except Exception:
+        try:
+            return int(float(value))
+        except Exception:
+            return int(default)
+
+
+def _coerce_float_config(value, default=None):
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _resolve_plot_style(font_family_override: Optional[str] = None, font_size_override: Optional[int] = None) -> dict:
+    base_family = font_family_override or _safe_get_config('plot_font_family', _safe_get_config('font_family', 'verdana'))
+    base_size_raw = font_size_override if font_size_override is not None else _safe_get_config('plot_font_size', _safe_get_config('font_size', 18))
+    base_size = _coerce_int_config(base_size_raw, 18)
+
+    title_size = _coerce_int_config(_safe_get_config('plot_title_font_size', base_size + 2), base_size + 2)
+    axis_title_size = _coerce_int_config(_safe_get_config('plot_axis_title_font_size', base_size), base_size)
+    tick_size = _coerce_int_config(_safe_get_config('plot_tick_font_size', max(base_size - 2, 1)), max(base_size - 2, 1))
+    legend_size = _coerce_int_config(_safe_get_config('plot_legend_font_size', tick_size), tick_size)
+    legend_title_size = _coerce_int_config(_safe_get_config('plot_legend_title_font_size', axis_title_size), axis_title_size)
+
+    legend_location = str(_safe_get_config('plot_legend_location', 'top_right')).strip().lower()
+    legend_location = legend_location.replace('-', '_').replace(' ', '_')
+    legend = dict(_LEGEND_LOCATION_PRESETS.get(legend_location, _LEGEND_LOCATION_PRESETS['top_right']))
+
+    legend_x = _coerce_float_config(_safe_get_config('plot_legend_x', None), None)
+    legend_y = _coerce_float_config(_safe_get_config('plot_legend_y', None), None)
+    if legend_x is not None:
+        legend['x'] = legend_x
+    if legend_y is not None:
+        legend['y'] = legend_y
+
+    legend_xanchor = _safe_get_config('plot_legend_xanchor', None)
+    legend_yanchor = _safe_get_config('plot_legend_yanchor', None)
+    if legend_xanchor is not None:
+        legend['xanchor'] = legend_xanchor
+    if legend_yanchor is not None:
+        legend['yanchor'] = legend_yanchor
+
+    legend_orientation = _safe_get_config('plot_legend_orientation', 'v')
+    if legend_orientation in {'h', 'v'}:
+        legend['orientation'] = legend_orientation
+    else:
+        legend['orientation'] = 'v'
+
+    legend['bgcolor'] = 'rgba(0,0,0,0)'
+    legend['font'] = dict(family=base_family, size=legend_size)
+    legend['title'] = dict(font=dict(family=base_family, size=legend_title_size))
+
+    return {
+        'font_family': base_family,
+        'font_size': base_size,
+        'title_font_size': title_size,
+        'axis_title_font_size': axis_title_size,
+        'tick_font_size': tick_size,
+        'legend_font_size': legend_size,
+        'legend_title_font_size': legend_title_size,
+        'legend': legend,
+    }
+
+
+def apply_global_plotly_style(fig, font_family: Optional[str] = None, font_size: Optional[int] = None):
+    if fig is None:
+        return fig
+
+    style = _resolve_plot_style(font_family_override=font_family, font_size_override=font_size)
+
+    try:
+        fig.update_layout(
+            font=dict(family=style['font_family'], size=style['font_size']),
+            title_font=dict(family=style['font_family'], size=style['title_font_size']),
+            legend=style['legend'],
+        )
+    except Exception:
+        pass
+
+    try:
+        fig.update_xaxes(
+            title_font=dict(family=style['font_family'], size=style['axis_title_font_size']),
+            tickfont=dict(family=style['font_family'], size=style['tick_font_size']),
+            automargin=True,
+        )
+    except Exception:
+        pass
+
+    try:
+        fig.update_yaxes(
+            title_font=dict(family=style['font_family'], size=style['axis_title_font_size']),
+            tickfont=dict(family=style['font_family'], size=style['tick_font_size']),
+            automargin=True,
+        )
+    except Exception:
+        pass
+
+    return fig
+
 
 class HMD_helper:
     def __init__(self, *, dataset: Optional[str] = None, data_folder: Optional[str] = None,
@@ -114,10 +232,13 @@ class HMD_helper:
             return -1
 
     def save_plotly(self, fig, name, remove_margins=False, width=1320, height=680, save_eps=True, save_png=True,
-                    save_html=True, open_browser=True, save_mp4=False, save_final=False, strip_title=True,
+                    save_html=True, open_browser=True, save_mp4=False, save_final=True, strip_title=True,
                     strip_subplot_titles=True):
         """
-        Helper function to save figure as html file.
+        Helper function to save a Plotly figure.
+
+        When ``save_final=True`` the enabled static and HTML exports are mirrored to
+        ``self.folder_figures`` in addition to the normal output directory.
 
         Args:
             fig (plotly figure): figure object.
@@ -131,27 +252,35 @@ class HMD_helper:
             save_html (bool, optional): save image as html file.
             open_browser (bool, optional): open figure in the browse.
             save_mp4 (bool, optional): save video as MP4 file.
-            save_final (bool, optional): whether to save the "good" final figure.
+            save_final (bool, optional): whether to also save enabled exports to the figures folder.
         """
+        fig = apply_global_plotly_style(fig)
+
         # disable MathJax globally for Kaleido when available
         try:
             if getattr(pio, 'kaleido', None) is not None and getattr(pio.kaleido, 'scope', None) is not None:
                 pio.kaleido.scope.mathjax = None
         except Exception:
             pass
-        # build path
+
+        # build primary path
         path = os.path.join(common.get_configs("output"))
         if not os.path.exists(path):
             os.makedirs(path)
 
-        # build path for final figure
+        # build path for final figure exports
         path_final = self.folder_figures
-        if save_final and not os.path.exists(path_final):
-            os.makedirs(path_final)
+        target_dirs = [path]
+        if save_final and path_final:
+            if not os.path.exists(path_final):
+                os.makedirs(path_final)
+            if os.path.abspath(path_final) != os.path.abspath(path):
+                target_dirs.append(path_final)
 
         # limit name to max 200 char (for Windows)
-        if len(path) + len(name) > 195 or len(path_final) + len(name) > 195:
-            name = name[:200 - len(path) - 5]
+        max_base = min((200 - len(d) - 5) for d in target_dirs) if target_dirs else (200 - len(path) - 5)
+        if len(name) > max_base:
+            name = name[:max_base]
 
         # Remove titles from the figure itself (keeps the HTML file name and address intact).
         # This affects both the HTML and any exported static images.
@@ -183,18 +312,10 @@ class HMD_helper:
 
         # save as html
         if save_html:
-            if open_browser:
-                # open in browser
-                py.offline.plot(fig, filename=os.path.join(path, name + '.html'))
-                # also save the final figure
-                if save_final:
-                    py.offline.plot(fig, filename=os.path.join(path_final, name + '.html'), auto_open=False)
-            else:
-                # do not open in browser
-                py.offline.plot(fig, filename=os.path.join(path, name + '.html'), auto_open=False)
-                # also save the final figure
-                if save_final:
-                    py.offline.plot(fig, filename=os.path.join(path_final, name + '.html'), auto_open=False)
+            primary_html = os.path.join(path, name + '.html')
+            py.offline.plot(fig, filename=primary_html, auto_open=bool(open_browser))
+            for extra_dir in target_dirs[1:]:
+                py.offline.plot(fig, filename=os.path.join(extra_dir, name + '.html'), auto_open=False)
 
         # remove white margins
         if remove_margins:
@@ -202,19 +323,13 @@ class HMD_helper:
 
         # save as eps
         if save_eps:
-            fig.write_image(os.path.join(path, name + '.eps'), width=width, height=height)
-
-            # also save the final figure
-            if save_final:
-                fig.write_image(os.path.join(path_final, name + '.eps'), width=width, height=height)
+            for target_dir in target_dirs:
+                fig.write_image(os.path.join(target_dir, name + '.eps'), width=width, height=height)
 
         # save as png
         if save_png:
-            fig.write_image(os.path.join(path, name + '.png'), width=width, height=height)
-
-            # also save the final figure
-            if save_final:
-                fig.write_image(os.path.join(path_final, name + '.png'), width=width, height=height)
+            for target_dir in target_dirs:
+                fig.write_image(os.path.join(target_dir, name + '.png'), width=width, height=height)
 
         # save as mp4
         if save_mp4:
@@ -227,7 +342,7 @@ class HMD_helper:
                 xaxis_title_offset=0, yaxis_title_offset=0,
                 xaxis_range=None, yaxis_range=None, stacked=False,
                 pretty_text=False, orientation='v', show_text_labels=False,
-                name_file='kp', save_file=False, save_final=False,
+                name_file='kp', save_file=False, save_final=True,
                 fig_save_width=1320, fig_save_height=680, legend_x=0.7, legend_y=0.95, legend_columns=1,
                 font_family=None, font_size=None, ttest_signals=None, ttest_marker='circle',
                 ttest_marker_size=3, ttest_marker_colour='black', ttest_annotations_font_size=10,
@@ -249,6 +364,9 @@ class HMD_helper:
         times = df['Timestamp'].values
         # plotly
         fig = go.Figure()
+
+        style = _resolve_plot_style(font_family_override=font_family, font_size_override=font_size)
+        font_family = style['font_family']
 
         # ensure yaxis_range is mutable if provided as a tuple
         if isinstance(yaxis_range, tuple):
@@ -352,13 +470,17 @@ class HMD_helper:
                              range=xaxis_range,
                              dtick=xaxis_step,
                              title_font=dict(family=font_family,
-                                             size=common.get_configs('font_size'))
+                                             size=style['axis_title_font_size']),
+                             tickfont=dict(family=font_family,
+                                           size=style['tick_font_size'])
                              )
         else:
             fig.update_xaxes(title_text=xaxis_title,
                              range=xaxis_range,
                              title_font=dict(family=font_family,
-                                             size=common.get_configs('font_size')))
+                                             size=style['axis_title_font_size']),
+                             tickfont=dict(family=font_family,
+                                           size=style['tick_font_size']))
 
         # Find the actual y range across all series for tick generation only.
         if all_values:
@@ -389,10 +511,12 @@ class HMD_helper:
             tickvals=visible_ticks,  # only show ticks for data range
             ticktext=tick_labels,
             automargin=True,
+            tickfont=dict(family=font_family,
+                          size=style['tick_font_size']),
             title=dict(
                 text="",
                 font=dict(family=font_family,
-                          size=common.get_configs('font_size')),
+                          size=style['axis_title_font_size']),
                 standoff=0
             )
         )
@@ -406,7 +530,7 @@ class HMD_helper:
             showarrow=False,
             textangle=-90,
             font=dict(family=font_family,
-                      size=common.get_configs('font_size')),
+                      size=style['axis_title_font_size']),
             xanchor='center',
             yanchor='middle'
         )
@@ -464,7 +588,7 @@ class HMD_helper:
                                           y=legend_y,
                                           bgcolor='rgba(0,0,0,0)',
                                           font=dict(family=font_family,
-                                                    size=common.get_configs('font_size') - 6)))
+                                                    size=style['legend_font_size'])))
 
         # multiple columns
         elif legend_columns == 2:
@@ -473,7 +597,7 @@ class HMD_helper:
                     x=legend_x,
                     y=legend_y,
                     bgcolor='rgba(0,0,0,0)',
-                    font=dict(size=common.get_configs('font_size')),
+                    font=dict(family=font_family, size=style['legend_font_size']),
                     orientation='h',
                     traceorder='normal',
                     itemwidth=30,
@@ -491,10 +615,12 @@ class HMD_helper:
             fig.update_layout(margin=margin)
 
         # update font family
-        fig.update_layout(font=dict(family=common.get_configs('font_family')))
+        fig.update_layout(font=dict(family=style['font_family']))
 
         # update font size
-        fig.update_layout(font=dict(size=common.get_configs('font_size')))
+        fig.update_layout(font=dict(size=style['font_size']))
+
+        fig = apply_global_plotly_style(fig, font_family=font_family, font_size=font_size)
 
         # save file to local output folder
         if save_file:

@@ -33,7 +33,7 @@ import statsmodels.api as sm  # noqa:F401
 from statsmodels.stats.multitest import multipletests  # noqa:F401
 
 # Project helpers (used for plot output directories).
-from helper import HMD_helper
+from helper import HMD_helper, apply_global_plotly_style
 import common  # project module used by HMD_helper.save_plotly
 from custom_logger import CustomLogger
 
@@ -379,6 +379,11 @@ def _sanitise_figure_for_export(fig: Any) -> Any:
         except Exception:
             pass
 
+    except Exception:
+        pass
+
+    try:
+        fig = apply_global_plotly_style(fig)
     except Exception:
         pass
 
@@ -1020,7 +1025,7 @@ def _resolve_plot_dirs(h: HMD_helper, out_root: Optional[str] = None) -> List[st
 
 
 def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, record_index: bool = True,
-               open_browser: bool = True) -> None:
+               open_browser: bool = True, save_final: bool = True) -> None:
     """
     Save a Plotly figure.
 
@@ -1033,6 +1038,8 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
     Notes
     - Set environment variable `CSU_OPEN_BROWSER=1` to force opening each plot in your browser.
     - The function still writes plots to the relevant output folders.
+    - Set ``save_final=True`` to mirror HTML, PNG and EPS into ``h.folder_figures``
+      when the helper supports it and in the fallback path.
     """
     global _KALEIDO_WARNED
     if fig is None:
@@ -1047,8 +1054,9 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
     # If we have the project's helper, prefer it. It handles Kaleido MathJax quirks and browser opening.
     # NOTE: Some variants of HMD_helper.save_plotly also save PDF outputs. This project does not need PDF.
     # We therefore:
-    # 1) Pass flags to disable PDF where supported (eg save_pdf, save_final).
-    # 2) Always do an explicit EPS export ourselves as a backstop.
+    # 1) Pass flags to disable PDF where supported.
+    # 2) Propagate save_final so HTML, PNG and EPS can also be written to the figures folder.
+    # 3) Always do an explicit EPS export ourselves as a backstop.
     try:
         if hasattr(h, "save_plotly"):
             # HMD_helper.save_plotly saves to `common.get_configs("output")` (and optionally to h.folder_figures).
@@ -1097,9 +1105,10 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
                 # Disable PDF like outputs where the helper supports it.
                 if 'save_pdf' in params:
                     kwargs['save_pdf'] = False
-                # Many helper versions use save_final to create additional final exports (often PDF).
+                # Propagate save_final so helper based saves can mirror HTML, PNG and EPS
+                # into the figures folder. Any PDF side effects are cleaned up below.
                 if 'save_final' in params:
-                    kwargs['save_final'] = False
+                    kwargs['save_final'] = bool(save_final)
 
                 h.save_plotly(fig, **kwargs)
 
@@ -1127,6 +1136,12 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
                             os.path.join(d, "final", f"{name}*.pdf"),
                             os.path.join(d, "pdf", f"{name}*.pdf"),
                         ]
+                        if save_final and getattr(h, "folder_figures", None):
+                            patterns.extend([
+                                os.path.join(str(h.folder_figures), f"{name}*.pdf"),
+                                os.path.join(str(h.folder_figures), "final", f"{name}*.pdf"),
+                                os.path.join(str(h.folder_figures), "pdf", f"{name}*.pdf"),
+                            ])
                         for pat in patterns:
                             for pdf_path in glob.glob(pat):
                                 try:
