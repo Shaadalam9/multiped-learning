@@ -45,6 +45,8 @@ from csu_core import (  # noqa: F401
     _safe_two_sample_test,
     _save_plot,
     _humanise_label,
+    _format_float_for_display,
+    _to_string_3dp,
     DATASET_COLOR_MAP,
     DATASET_LABEL_MAP,
     _trial_num_display,
@@ -239,13 +241,13 @@ def _prepare_analysis_inputs(mapping: pd.DataFrame, h: HMD_helper, reanalyse: bo
             _ensure_dir(ds_out)
             _extract_questionnaire_selected_values(
                 dataset=ds_name,
-                intake_path=paths.get("intake_questionnaire"),
-                post_path=paths.get("post_experiment_questionnaire"),
+                intake_path=paths.get("intake_questionnaire"),  # type: ignore
+                post_path=paths.get("post_experiment_questionnaire"),  # type: ignore
                 out_dir=ds_out,
             )
             _summarize_demographics_from_intake(
                 dataset=ds_name,
-                intake_path=paths.get("intake_questionnaire"),
+                intake_path=paths.get("intake_questionnaire"),  # type: ignore
                 features_df=features_by_dataset.get(ds_name),
                 mapping_df=mapping,
                 out_dir=ds_out,
@@ -372,14 +374,14 @@ def _prepare_analysis_inputs(mapping: pd.DataFrame, h: HMD_helper, reanalyse: bo
 
         _extract_questionnaire_selected_values(
             dataset=ds_name,
-            intake_path=paths.get("intake_questionnaire"),
-            post_path=paths.get("post_experiment_questionnaire"),
+            intake_path=paths.get("intake_questionnaire"),  # type: ignore
+            post_path=paths.get("post_experiment_questionnaire"),  # type: ignore
             out_dir=ds_out,
         )
 
         _summarize_demographics_from_intake(
             dataset=ds_name,
-            intake_path=paths.get("intake_questionnaire"),
+            intake_path=paths.get("intake_questionnaire"),  # type: ignore
             features_df=features_by_dataset.get(ds_name),
             mapping_df=mapping,
             out_dir=ds_out,
@@ -521,7 +523,7 @@ def _prepare_analysis_inputs(mapping: pd.DataFrame, h: HMD_helper, reanalyse: bo
             desc = part_metrics.groupby("dataset")[key_pm].agg(["count", "mean", "std"])
             logger.info("\nParticipant-metric descriptives (count/mean/std) for key metrics:")
             with pd.option_context("display.width", 160):
-                logger.info(desc.to_string())
+                logger.info(_to_string_3dp(desc))
 
         metric_cols = [c for c in part_metrics.columns if c not in ["dataset", "participant_id"]]
         comp_part = compare_participant_metrics(part_metrics, metric_cols, fdr=True)
@@ -705,10 +707,9 @@ def _print_dataset_overview(all_features: pd.DataFrame) -> None:
         miss = (
             all_features.groupby("dataset")[miss_metrics]
             .apply(lambda g: g.isna().mean())
-            .round(3)
         )
         logger.info("\nMissingness (fraction NaN) for plotted metrics:")
-        logger.info(miss.to_string())
+        logger.info(_to_string_3dp(miss))
 
 
 def _print_metric_descriptives(all_features: pd.DataFrame, metrics: List[str]) -> None:
@@ -741,7 +742,7 @@ def _print_metric_descriptives(all_features: pd.DataFrame, metrics: List[str]) -
         return
     df = pd.DataFrame(rows)
     with pd.option_context("display.max_rows", 200, "display.max_columns", 50):
-        logger.info(df.sort_values(["metric", "dataset"]).round(4).to_string(index=False))
+        logger.info(_to_string_3dp(df.sort_values(["metric", "dataset"]), index=False))
 
 
 def _print_top_results(res: pd.DataFrame, title: str, top_k: int = 15) -> None:
@@ -767,7 +768,7 @@ def _print_top_results(res: pd.DataFrame, title: str, top_k: int = 15) -> None:
         out = res.head(top_k)
 
     with pd.option_context("display.max_rows", 200, "display.max_columns", 100):
-        logger.info(out[cols_to_show].to_string(index=False))
+        logger.info(_to_string_3dp(out[cols_to_show], index=False))
 
 
 def _factor_drift_curve(df: pd.DataFrame, factor_col: str) -> pd.DataFrame:
@@ -1927,7 +1928,7 @@ def _summarize_demographics_from_intake(dataset: str, intake_path: str, features
         logger.error("Gender: (column not found)")
 
     if n_age > 0:
-        logger.info(f"Age: mean={age_mean:.2f}, SD={age_sd:.2f} (n={n_age})")
+        logger.info(f"Age: mean={_format_float_for_display(age_mean)}, SD={_format_float_for_display(age_sd)} (n={n_age})")
     else:
         logger.error("Age: (column not found / no numeric values)")
 
@@ -2248,7 +2249,7 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
     desc.to_csv(desc_path, index=False)
 
     logger.info("\n=== Missingness: latency metrics ===")
-    logger.info(desc.to_string(index=False))
+    logger.info(_to_string_3dp(desc, index=False))
     logger.info(f"[Missingness] wrote descriptives -> {desc_path}")
 
     # Models
@@ -2314,7 +2315,7 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
         if not highlight.empty:
             highlight = highlight.sort_values(["outcome", "p"]).head(20)
             logger.info("\n[Missingness] adjusted model: top dataset-related terms (by p)")
-            logger.info(highlight[["outcome", "term", "OR", "OR_lo", "OR_hi", "p"]].to_string(index=False))
+            logger.info(_to_string_3dp(highlight[["outcome", "term", "OR", "OR_lo", "OR_hi", "p"]], index=False))
 
     # Optional plot: missingness over trial number (1-based for display)
     try:
@@ -2487,7 +2488,7 @@ def main(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str,
             desc = part_E.groupby("dataset")[key_cols].agg(["count", "mean", "std"])
             logger.info("\nE-metric descriptives (count/mean/std):")
             with pd.option_context("display.width", 180):
-                logger.info(desc.to_string())
+                logger.info(_to_string_3dp(desc))
 
             # compare shuffled vs unshuffled for participant E metrics
             comp_E = compare_participant_metrics(part_E, key_cols, fdr=True)

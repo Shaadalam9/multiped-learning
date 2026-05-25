@@ -18,7 +18,8 @@ import os
 import re
 import warnings
 import math
-from typing import Optional, List, Tuple, Any
+from fnmatch import fnmatch
+from typing import Optional, List, Tuple, Any, Dict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -46,6 +47,46 @@ HAVE_SM = True
 logger = CustomLogger(__name__)  # use custom logger
 
 
+# ---------------------------------------------------------------------------
+# Output precision helpers
+# ---------------------------------------------------------------------------
+# Keep raw numeric values in DataFrames/CSVs, but format console/report tables
+# with at most three decimal places. Small non-zero values are shown in
+# scientific notation so p values do not appear as exact zero.
+DISPLAY_DECIMALS = 3
+
+
+def _format_float_for_display(value: float, decimals: int = DISPLAY_DECIMALS) -> str:
+    try:
+        x = float(value)
+    except Exception:
+        return str(value)
+    if np.isnan(x):
+        return "nan"
+    if np.isposinf(x):
+        return "inf"
+    if np.isneginf(x):
+        return "-inf"
+    if x != 0 and abs(x) < 10 ** (-decimals):
+        return f"{x:.{decimals}e}"
+    text = f"{x:.{decimals}f}".rstrip("0").rstrip(".")
+    return "0" if text in {"-0", ""} else text
+
+
+def _to_string_3dp(df: pd.DataFrame, *args, **kwargs) -> str:
+    """Return a DataFrame string with floats shown to at most 3 decimals."""
+    return df.to_string(*args, float_format=_format_float_for_display, **kwargs)
+
+
+def _round_numeric_for_output(df: pd.DataFrame, decimals: int = DISPLAY_DECIMALS) -> pd.DataFrame:
+    """Return a copy with numeric columns rounded for optional paper outputs."""
+    out = df.copy()
+    numeric_cols = out.select_dtypes(include=[np.number]).columns
+    if len(numeric_cols):
+        out.loc[:, numeric_cols] = out.loc[:, numeric_cols].round(decimals)
+    return out
+
+
 # Consistent dataset labels and colours used across all exported figures.
 DATASET_LABEL_MAP = {
     "shuffled": "Randomised",
@@ -65,6 +106,442 @@ DATASET_COLOUR_MAP = {
 
 # Compatibility alias for earlier patches that used American spelling.
 DATASET_COLOR_MAP = DATASET_COLOUR_MAP
+
+
+_LEGEND_LOCATION_PRESETS = {
+    "top_right": {"x": 0.99, "y": 0.99, "xanchor": "right", "yanchor": "top"},
+    "top_left": {"x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top"},
+    "top_center": {"x": 0.50, "y": 0.99, "xanchor": "center", "yanchor": "top"},
+    "bottom_right": {"x": 0.99, "y": 0.01, "xanchor": "right", "yanchor": "bottom"},
+    "bottom_left": {"x": 0.01, "y": 0.01, "xanchor": "left", "yanchor": "bottom"},
+    "bottom_center": {"x": 0.50, "y": 0.01, "xanchor": "center", "yanchor": "bottom"},
+    "right_center": {"x": 0.99, "y": 0.50, "xanchor": "right", "yanchor": "middle"},
+    "left_center": {"x": 0.01, "y": 0.50, "xanchor": "left", "yanchor": "middle"},
+    "outside_right": {"x": 1.02, "y": 0.99, "xanchor": "left", "yanchor": "top"},
+}
+
+
+# ---------------------------------------------------------------------------
+# Per-figure text size controls for exported Plotly figures
+# ---------------------------------------------------------------------------
+# Edit these dictionaries when a specific figure needs larger or smaller text.
+# The keys are the file names passed to _save_plot(..., name="...") without
+# extension. Wildcards are supported through PLOT_TEXT_SIZE_BY_PATTERN.
+#
+# Available keys in a style dictionary:
+#   x_label_size, y_label_size, x_tick_size, y_tick_size,
+#   legend_size, legend_title_size, legend_x, legend_y,
+#   legend_xanchor, legend_yanchor, legend_orientation,
+#   line_width, violin_line_width, marker_line_width, marker_size,
+#   title_size, annotation_size, font_size, width, height
+#
+# Legend placement uses Plotly paper coordinates. For example,
+# legend_x=0.98 and legend_y=0.98 places the legend near the top right,
+# while legend_x=0.02 and legend_y=0.98 places it near the top left.
+#
+# These settings are applied centrally before HTML/PNG/EPS export, so all bar,
+# line, scatter and violin plots can be controlled from one place.
+PLOT_TEXT_SIZE_DEFAULT: Dict[str, Any] = {
+    "font_size": 18,
+    "x_label_size": 20,
+    "y_label_size": 20,
+    "x_tick_size": 16,
+    "y_tick_size": 16,
+    "legend_size": 16,
+    "legend_title_size": 17,
+    "title_size": 20,
+    "annotation_size": 16,
+    "width": 1320,
+    "height": 680,
+}
+
+PLOT_TEXT_SIZE_BY_KIND: Dict[str, Dict[str, Any]] = {
+    "bar": {
+        "x_label_size": 22,
+        "y_label_size": 22,
+        "x_tick_size": 18,
+        "y_tick_size": 18,
+        "legend_size": 18,
+        "marker_line_width": 1,
+        "height": 760,
+    },
+    "line": {
+        "x_label_size": 24,
+        "y_label_size": 24,
+        "x_tick_size": 20,
+        "y_tick_size": 20,
+        "legend_size": 18,
+        "line_width": 3,
+        "height": 760,
+    },
+    "violin": {
+        "x_label_size": 24,
+        "y_label_size": 24,
+        "x_tick_size": 20,
+        "y_tick_size": 20,
+        "legend_size": 18,
+        "violin_line_width": 2,
+        "height": 760,
+    },
+    "scatter": {
+        "x_label_size": 22,
+        "y_label_size": 22,
+        "x_tick_size": 18,
+        "y_tick_size": 18,
+        "legend_size": 17,
+        "height": 740,
+    },
+}
+
+# Exact figure-specific overrides. Add any generated figure name here when you
+# want that one plot to have different sizes from the default for its kind.
+PLOT_TEXT_SIZE_BY_NAME: Dict[str, Dict[str, Any]] = {
+    # Main manuscript line plots
+    "curve_time_on_task_trigger_mean": {
+        "x_label_size": 28,
+        "y_label_size": 28,
+        "x_tick_size": 23,
+        "y_tick_size": 23,
+        "legend_size": 22,
+        "legend_x": 0.18,
+        "legend_y": 0.98,
+        "legend_xanchor": "right",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "line_width": 4,
+        "height": 820,
+    },
+    "curve_time_on_task_Q3": {
+        "x_label_size": 28,
+        "y_label_size": 28,
+        "x_tick_size": 23,
+        "y_tick_size": 23,
+        "legend_size": 22,
+        "legend_x": 0.98,
+        "legend_y": 0.98,
+        "legend_xanchor": "right",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "line_width": 4,
+        "height": 820,
+    },
+    "curve_time_on_task_dtrigger_sd": {
+        "x_label_size": 28,
+        "y_label_size": 28,
+        "x_tick_size": 23,
+        "y_tick_size": 23,
+        "legend_size": 22,
+        "legend_x": 0.98,
+        "legend_y": 0.98,
+        "legend_xanchor": "right",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "line_width": 4,
+        "height": 820,
+    },
+
+    # Appendix latency event absence line plots
+    "missingness_press_over_trial": {
+        "x_label_size": 26,
+        "y_label_size": 26,
+        "x_tick_size": 22,
+        "y_tick_size": 22,
+        "legend_size": 20,
+        "legend_x": 0.98,
+        "legend_y": 0.98,
+        "legend_xanchor": "right",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "line_width": 4,
+        "height": 780,
+    },
+    "missingness_release_over_trial": {
+        "x_label_size": 26,
+        "y_label_size": 26,
+        "x_tick_size": 22,
+        "y_tick_size": 22,
+        "legend_size": 20,
+        "legend_x": 0.98,
+        "legend_y": 0.98,
+        "legend_xanchor": "right",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "line_width": 4,
+        "height": 780,
+    },
+
+    # Appendix AUC bar plot
+    "F2_bar_auc_by_signal": {
+        "x_label_size": 24,
+        "y_label_size": 24,
+        "x_tick_size": 18,
+        "y_tick_size": 20,
+        "legend_size": 18,
+        "height": 820,
+    },
+
+    # Exposure based figure panels
+    "MM5_curve_Q3_exposure_yielding": {
+        "x_label_size": 26,
+        "y_label_size": 26,
+        "x_tick_size": 22,
+        "y_tick_size": 22,
+        "legend_size": 20,
+        "legend_x": 0.98,
+        "legend_y": 0.98,
+        "legend_xanchor": "right",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "line_width": 4,
+        "height": 780,
+    },
+    "MM5_curve_Q3_exposure_eHMI": {
+        "x_label_size": 26,
+        "y_label_size": 26,
+        "x_tick_size": 22,
+        "y_tick_size": 22,
+        "legend_size": 20,
+        "legend_x": 0.98,
+        "legend_y": 0.98,
+        "legend_xanchor": "right",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "line_width": 4,
+        "height": 780,
+    },
+    "MM5_forest_exposure_interactions": {
+        "x_label_size": 24,
+        "y_label_size": 24,
+        "x_tick_size": 20,
+        "y_tick_size": 18,
+        "height": 820,
+    },
+
+    # Reliability figures
+    "reliability_trigger_mean_odd_even": {"x_label_size": 24,
+                                          "y_label_size": 24,
+                                          "x_tick_size": 20,
+                                          "y_tick_size": 20,
+                                          "height": 760},
+
+    "reliability_trigger_mean_early_late": {"x_label_size": 24,
+                                            "y_label_size": 24,
+                                            "x_tick_size": 20,
+                                            "y_tick_size": 20,
+                                            "height": 760},
+
+    "reliability_Q3_odd_even": {"x_label_size": 24,
+                                "y_label_size": 24,
+                                "x_tick_size": 20,
+                                "y_tick_size": 20,
+                                "height": 760},
+
+    "reliability_Q3_early_late": {"x_label_size": 24,
+                                  "y_label_size": 24,
+                                  "x_tick_size": 20,
+                                  "y_tick_size": 20,
+                                  "height": 760},
+}
+
+# Wildcard overrides for groups of figures. Exact entries above still win.
+PLOT_TEXT_SIZE_BY_PATTERN: List[Tuple[str, Dict[str, Any]]] = [
+    ("compare_participant_violin_E_*", {"x_label_size": 26,
+                                        "y_label_size": 26,
+                                        "x_tick_size": 22,
+                                        "y_tick_size": 22,
+                                        "legend_size": 20,
+                                        "legend_x": 0.98,
+                                        "legend_y": 0.98,
+                                        "legend_xanchor": "right",
+                                        "legend_yanchor": "top",
+                                        "violin_line_width": 2,
+                                        "height": 800}),
+
+    ("compare_participant_violin_breakmatched_*", {"x_label_size": 24,
+                                                   "y_label_size": 24,
+                                                   "x_tick_size": 20,
+                                                   "y_tick_size": 20,
+                                                   "height": 760}),
+
+    ("compare_participant_violin_*", {"x_label_size": 24,
+                                      "y_label_size": 24,
+                                      "x_tick_size": 20,
+                                      "y_tick_size": 20,
+                                      "height": 760}),
+
+    ("compare_violin_*", {"x_label_size": 24,
+                          "y_label_size": 24,
+                          "x_tick_size": 20,
+                          "y_tick_size": 20,
+                          "height": 760}),
+
+    ("curve_time_on_task_*", {"x_label_size": 26,
+                              "y_label_size": 26,
+                              "x_tick_size": 22,
+                              "y_tick_size": 22,
+                              "legend_size": 20,
+                              "legend_x": 0.98,
+                              "legend_y": 0.98,
+                              "legend_xanchor": "right",
+                              "legend_yanchor": "top",
+                              "line_width": 4,
+                              "height": 800}),
+
+    ("missingness_*_over_trial", {"x_label_size": 26,
+                                  "y_label_size": 26,
+                                  "x_tick_size": 22,
+                                  "y_tick_size": 22,
+                                  "legend_size": 20,
+                                  "legend_x": 0.98,
+                                  "legend_y": 0.98,
+                                  "legend_xanchor": "right",
+                                  "legend_yanchor": "top",
+                                  "line_width": 4,
+                                  "height": 780}),
+
+    ("yaw_forward_fraction_by_context*", {"x_label_size": 22,
+                                          "y_label_size": 22,
+                                          "x_tick_size": 18,
+                                          "y_tick_size": 18,
+                                          "legend_size": 18,
+                                          "height": 760}),
+
+    ("F2_bar_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 18, "y_tick_size": 20, "height": 820}),
+    ("F2_roc_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18,
+                  "height": 760}),
+    ("F1_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
+    ("F1_scatter_*", {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "height": 740}),
+]
+
+
+def _infer_plot_kind(fig: Any) -> str:
+    """Infer a broad plot kind from Plotly traces."""
+    try:
+        trace_types = {str(getattr(tr, "type", "")).lower() for tr in fig.data}
+    except Exception:
+        return "default"
+    if "violin" in trace_types or "box" in trace_types:
+        return "violin"
+    if "bar" in trace_types:
+        return "bar"
+    if "scatter" in trace_types:
+        try:
+            modes = [str(getattr(tr, "mode", "")) for tr in fig.data if str(getattr(tr,
+                                                                                    "type", "")).lower() == "scatter"]
+            if any("lines" in m for m in modes):
+                return "line"
+        except Exception:
+            return "line"
+        return "scatter"
+    return "default"
+
+
+def _plot_text_style_for_name(fig: Any, name: str) -> Dict[str, Any]:
+    """Return the merged text/export-size style for one figure name."""
+    style: Dict[str, Any] = dict(PLOT_TEXT_SIZE_DEFAULT)
+    kind = _infer_plot_kind(fig)
+    style.update(PLOT_TEXT_SIZE_BY_KIND.get(kind, {}))
+    for pattern, overrides in PLOT_TEXT_SIZE_BY_PATTERN:
+        if fnmatch(str(name), pattern):
+            style.update(overrides)
+    style.update(PLOT_TEXT_SIZE_BY_NAME.get(str(name), {}))
+    return style
+
+
+def _apply_plot_text_style(fig: Any, name: str) -> Any:
+    """Apply figure-specific axis label and tick sizes before export."""
+    if fig is None:
+        return fig
+    style = _plot_text_style_for_name(fig, name)
+
+    try:
+        fig.update_layout(
+            font=dict(size=style.get("font_size", PLOT_TEXT_SIZE_DEFAULT["font_size"])),
+            title_font=dict(size=style.get("title_size", PLOT_TEXT_SIZE_DEFAULT["title_size"])),
+        )
+    except Exception:
+        pass
+
+    try:
+        fig.update_xaxes(
+            title_font_size=style.get("x_label_size", PLOT_TEXT_SIZE_DEFAULT["x_label_size"]),
+            tickfont_size=style.get("x_tick_size", PLOT_TEXT_SIZE_DEFAULT["x_tick_size"]),
+            automargin=True,
+        )
+    except Exception:
+        pass
+
+    try:
+        fig.update_yaxes(
+            title_font_size=style.get("y_label_size", PLOT_TEXT_SIZE_DEFAULT["y_label_size"]),
+            tickfont_size=style.get("y_tick_size", PLOT_TEXT_SIZE_DEFAULT["y_tick_size"]),
+            automargin=True,
+        )
+    except Exception:
+        pass
+
+    try:
+        legend_update = {
+            "font": dict(size=style.get("legend_size", PLOT_TEXT_SIZE_DEFAULT["legend_size"])),
+            "title": dict(font=dict(size=style.get("legend_title_size", PLOT_TEXT_SIZE_DEFAULT["legend_title_size"]))),
+        }
+        preset_name = style.get("legend_position")
+        if preset_name in _LEGEND_LOCATION_PRESETS:
+            legend_update.update(_LEGEND_LOCATION_PRESETS[preset_name])
+        for style_key, legend_key in (
+            ("legend_x", "x"),
+            ("legend_y", "y"),
+            ("legend_xanchor", "xanchor"),
+            ("legend_yanchor", "yanchor"),
+            ("legend_orientation", "orientation"),
+            ("legend_traceorder", "traceorder"),
+            ("legend_bgcolor", "bgcolor"),
+            ("legend_bordercolor", "bordercolor"),
+            ("legend_borderwidth", "borderwidth"),
+        ):
+            if style_key in style:
+                legend_update[legend_key] = style[style_key]
+        fig.update_layout(legend=legend_update)
+    except Exception:
+        pass
+
+    try:
+        if style.get("line_width") is not None:
+            fig.update_traces(line=dict(width=float(style["line_width"])), selector=dict(type="scatter"))
+    except Exception:
+        pass
+
+    try:
+        if style.get("violin_line_width") is not None:
+            fig.update_traces(line=dict(width=float(style["violin_line_width"])), selector=dict(type="violin"))
+            fig.update_traces(line=dict(width=float(style["violin_line_width"])), selector=dict(type="box"))
+    except Exception:
+        pass
+
+    try:
+        if style.get("marker_line_width") is not None:
+            fig.update_traces(marker_line_width=float(style["marker_line_width"]), selector=dict(type="bar"))
+    except Exception:
+        pass
+
+    try:
+        if style.get("marker_size") is not None:
+            fig.update_traces(marker=dict(size=float(style["marker_size"])), selector=dict(type="scatter"))
+    except Exception:
+        pass
+
+    try:
+        fig.update_annotations(font_size=style.get("annotation_size", PLOT_TEXT_SIZE_DEFAULT["annotation_size"]))
+    except Exception:
+        pass
+
+    return fig
+
+
+def _plot_export_size(name: str, fig: Any) -> Tuple[int, int]:
+    """Return width and height for static exports of a named figure."""
+    style = _plot_text_style_for_name(fig, name)
+    return int(style.get("width", 1320)), int(style.get("height", 680))
 
 
 def _normalise_dataset_token(value: Any) -> Any:
@@ -982,7 +1459,7 @@ def _print_table(df: pd.DataFrame, title: str, max_rows: int = 12) -> None:
         logger.info("(empty)")
         return
     with pd.option_context("display.max_rows", max_rows, "display.max_columns", 50, "display.width", 160):
-        logger.info(df.head(max_rows).to_string(index=False))
+        logger.info(_to_string_3dp(df.head(max_rows), index=False))
 
 
 def _pick_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
@@ -1045,6 +1522,8 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
     if fig is None:
         return
     fig = _sanitise_figure_for_export(fig)
+    fig = _apply_plot_text_style(fig, name)
+    export_width, export_height = _plot_export_size(name, fig)
 
     # env var override (handy when you do not want to touch call sites)
     env_open = os.environ.get('CSU_OPEN_BROWSER', None)
@@ -1089,9 +1568,9 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
                 if 'remove_margins' in params:
                     kwargs['remove_margins'] = False
                 if 'width' in params:
-                    kwargs['width'] = 1320
+                    kwargs['width'] = export_width
                 if 'height' in params:
-                    kwargs['height'] = 680
+                    kwargs['height'] = export_height
                 if 'save_eps' in params:
                     kwargs['save_eps'] = True
                 if 'save_png' in params:
@@ -1122,7 +1601,7 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
 
                     # EPS backstop
                     try:
-                        fig.write_image(os.path.join(d, f"{name}.eps"), width=1320, height=680)
+                        fig.write_image(os.path.join(d, f"{name}.eps"), width=export_width, height=export_height)
                     except Exception as e:
                         if not _KALEIDO_WARNED:
                             _KALEIDO_WARNED = True
@@ -1193,7 +1672,7 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
 
         # PNG
         try:
-            fig.write_image(os.path.join(d, f"{name}.png"), width=1320, height=680)
+            fig.write_image(os.path.join(d, f"{name}.png"), width=export_width, height=export_height)
         except Exception as e:
             if not _KALEIDO_WARNED:
                 _KALEIDO_WARNED = True
@@ -1201,7 +1680,7 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
 
         # EPS
         try:
-            fig.write_image(os.path.join(d, f"{name}.eps"), width=1320, height=680)
+            fig.write_image(os.path.join(d, f"{name}.eps"), width=export_width, height=export_height)
         except Exception:
             pass
 

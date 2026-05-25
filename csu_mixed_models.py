@@ -37,6 +37,8 @@ from csu_core import (  # noqa: F401
     _save_plot,
     _trial_num_display,
     _write_plot_index_and_open,
+    _format_float_for_display,
+    _to_string_3dp,
     DATASET_COLOR_MAP,
     DATASET_LABEL_MAP,
     compare_participant_metrics,
@@ -158,7 +160,7 @@ def _mm_forest_plot(coef_df: pd.DataFrame, title: str, name: str, h: HMD_helper)
             arrayminus=(d["coef"] - d["ci_lo"]).clip(lower=0),
         ),
         hovertext=[
-            f"dv={r.dv}<br>term={r.term}<br>coef={r.coef:.4g}<br>p={r.p:.3g}<br>q={getattr(r,'q_fdr',np.nan):.3g}"
+            f"dv={r.dv}<br>term={r.term}<br>coef={r.coef:.3g}<br>p={r.p:.3g}<br>q={getattr(r,'q_fdr',np.nan):.3g}"
             for r in d.itertuples(index=False)
         ],
         hoverinfo="text",
@@ -415,16 +417,16 @@ def _between_subject_balance_and_sensitivity(
     # --- report text ---
     report_lines = []
     report_lines.append("Between-subject balance & sensitivity checks\n")
-    report_lines.append("Participant counts by dataset:\n" + part_counts.to_string(index=False) + "\n")
+    report_lines.append("Participant counts by dataset:\n" + _to_string_3dp(part_counts, index=False) + "\n")
     report_lines.append("\nTrial completion summary (main trials):\n")
     if not trials_pp.empty:
         summ = trials_pp.groupby("dataset")["n_trials_main"].agg(["count", "mean", "std", "min", "median", "max"])
-        report_lines.append(summ.to_string() + "\n")
+        report_lines.append(_to_string_3dp(summ) + "\n")
     if not miss_pp.empty and outcome_cols:
         report_lines.append("\nPer-participant missingness (means by dataset):\n")
         miss_cols = [c for c in miss_pp.columns if c.startswith("missing_frac_")]
         miss_summ = miss_pp.groupby("dataset")[miss_cols].mean()
-        report_lines.append(miss_summ.to_string() + "\n")
+        report_lines.append(_to_string_3dp(miss_summ) + "\n")
     report_lines.append(f"\nBaseline window: first {K} main trials per participant.\n")
     report_path = os.path.join(out_root, "between_subject_balance_report.txt")
     with open(report_path, "w", encoding="utf-8") as f:
@@ -639,7 +641,7 @@ def run_mixed_models_analysis(trial_df: Optional[pd.DataFrame] = None) -> None:
                         y=[r["coef"]],
                         mode="markers",
                         error_y=dict(type="data", array=[r["ci_hi"] - r["coef"]], arrayminus=[r["coef"] - r["ci_lo"]]),
-                        hovertext=f"coef={r['coef']:.4g}<br>p_tost={r['p_tost']:.3g}<br>delta={r['delta']:.4g}",
+                        hovertext=f"coef={r['coef']:.3g}<br>p_tost={r['p_tost']:.3g}<br>delta={r['delta']:.3g}",
                         hoverinfo="text",
                     ))
                     fig.add_hline(y=0)

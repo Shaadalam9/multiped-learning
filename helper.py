@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Optional
+from fnmatch import fnmatch
+from typing import Optional, Dict, Any, Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -54,6 +55,19 @@ except Exception:  # pragma: no cover
 logger = CustomLogger(__name__)
 HMD_class = HMD_yaw()
 extra_class = Tools()
+
+
+def _format_float_for_display(value, decimals: int = 3) -> str:
+    try:
+        x = float(value)
+    except Exception:
+        return str(value)
+    if np.isnan(x):
+        return "nan"
+    if x != 0 and abs(x) < 10 ** (-decimals):
+        return f"{x:.{decimals}e}"
+    text = f"{x:.{decimals}f}".rstrip("0").rstrip(".")
+    return "0" if text in {"-0", ""} else text
 
 
 def _safe_get_config(key: str, default=None):
@@ -92,6 +106,175 @@ _LEGEND_LOCATION_PRESETS = {
     "left_center": {"x": 0.01, "y": 0.50, "xanchor": "left", "yanchor": "middle"},
     "outside_right": {"x": 1.02, "y": 0.99, "xanchor": "left", "yanchor": "top"},
 }
+
+
+# ---------------------------------------------------------------------------
+# Per-figure text size controls for exported Plotly figures
+# ---------------------------------------------------------------------------
+# These settings are used by HMD_helper.save_plotly(..., name="..."). They are
+# intentionally the same style controls as in csu_core.py, so both direct helper
+# plots and csu_* plots use the same per-figure axis, legend and line styling.
+#
+# Available keys include:
+#   x_label_size, y_label_size, x_tick_size, y_tick_size,
+#   legend_size, legend_title_size, legend_x, legend_y,
+#   legend_xanchor, legend_yanchor, legend_orientation,
+#   line_width, violin_line_width, marker_line_width, marker_size,
+#   title_size, annotation_size, font_size, width, height
+PLOT_TEXT_SIZE_DEFAULT: Dict[str, Any] = {
+    "font_size": 18,
+    "x_label_size": 20,
+    "y_label_size": 20,
+    "x_tick_size": 16,
+    "y_tick_size": 16,
+    "legend_size": 16,
+    "legend_title_size": 17,
+    "title_size": 20,
+    "annotation_size": 16,
+    "width": 1320,
+    "height": 680,
+}
+
+PLOT_TEXT_SIZE_BY_KIND: Dict[str, Dict[str, Any]] = {
+    "bar": {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "legend_size": 18, "marker_line_width": 1, "height": 760},
+    "line": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18, "line_width": 3, "height": 760},
+    "violin": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18, "violin_line_width": 2, "height": 760},
+    "scatter": {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "legend_size": 17, "marker_size": 8, "height": 740},
+}
+
+PLOT_TEXT_SIZE_BY_NAME: Dict[str, Dict[str, Any]] = {
+    "curve_time_on_task_trigger_mean": {"x_label_size": 28, "y_label_size": 28, "x_tick_size": 23, "y_tick_size": 23, "legend_size": 22, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 820},
+    "curve_time_on_task_Q3": {"x_label_size": 28, "y_label_size": 28, "x_tick_size": 23, "y_tick_size": 23, "legend_size": 22, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 820},
+    "curve_time_on_task_dtrigger_sd": {"x_label_size": 28, "y_label_size": 28, "x_tick_size": 23, "y_tick_size": 23, "legend_size": 22, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 820},
+    "missingness_press_over_trial": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
+    "missingness_release_over_trial": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
+    "F2_bar_auc_by_signal": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 18, "y_tick_size": 20, "legend_size": 18, "height": 820},
+    "MM5_curve_Q3_exposure_yielding": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
+    "MM5_curve_Q3_exposure_eHMI": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
+    "MM5_forest_exposure_interactions": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 18, "height": 820},
+    "reliability_trigger_mean_odd_even": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
+    "reliability_trigger_mean_early_late": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
+    "reliability_Q3_odd_even": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
+    "reliability_Q3_early_late": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
+}
+
+PLOT_TEXT_SIZE_BY_PATTERN: List[Tuple[str, Dict[str, Any]]] = [
+    ("compare_participant_violin_E_*", {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_x": 0.98, "legend_y": 0.98, "legend_xanchor": "right", "legend_yanchor": "top", "violin_line_width": 2, "height": 800}),
+    ("compare_participant_violin_breakmatched_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
+    ("compare_participant_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
+    ("compare_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
+    ("curve_time_on_task_*", {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_x": 0.98, "legend_y": 0.98, "legend_xanchor": "right", "legend_yanchor": "top", "line_width": 4, "height": 800}),
+    ("missingness_*_over_trial", {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_x": 0.98, "legend_y": 0.98, "legend_xanchor": "right", "legend_yanchor": "top", "line_width": 4, "height": 780}),
+    ("yaw_forward_fraction_by_context*", {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "legend_size": 18, "height": 760}),
+    ("F2_bar_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 18, "y_tick_size": 20, "height": 820}),
+    ("F2_roc_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18, "height": 760}),
+    ("F1_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
+    ("F1_scatter_*", {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "height": 740}),
+]
+
+
+def _infer_plot_kind(fig: Any) -> str:
+    try:
+        trace_types = {str(getattr(tr, "type", "")).lower() for tr in fig.data}
+    except Exception:
+        return "default"
+    if "violin" in trace_types or "box" in trace_types:
+        return "violin"
+    if "bar" in trace_types:
+        return "bar"
+    if "scatter" in trace_types:
+        try:
+            modes = [str(getattr(tr, "mode", "")) for tr in fig.data if str(getattr(tr, "type", "")).lower() == "scatter"]
+            if any("lines" in m for m in modes):
+                return "line"
+        except Exception:
+            return "line"
+        return "scatter"
+    return "default"
+
+
+def _plot_text_style_for_name(fig: Any, name: str) -> Dict[str, Any]:
+    style: Dict[str, Any] = dict(PLOT_TEXT_SIZE_DEFAULT)
+    style.update(PLOT_TEXT_SIZE_BY_KIND.get(_infer_plot_kind(fig), {}))
+    for pattern, overrides in PLOT_TEXT_SIZE_BY_PATTERN:
+        if fnmatch(str(name), pattern):
+            style.update(overrides)
+    style.update(PLOT_TEXT_SIZE_BY_NAME.get(str(name), {}))
+    return style
+
+
+def apply_plotly_text_style_for_name(fig: Any, name: str) -> Any:
+    if fig is None:
+        return fig
+    style = _plot_text_style_for_name(fig, name)
+    try:
+        fig.update_layout(font=dict(size=style.get("font_size", 18)), title_font=dict(size=style.get("title_size", 20)))
+    except Exception:
+        pass
+    try:
+        fig.update_xaxes(title_font_size=style.get("x_label_size", 20), tickfont_size=style.get("x_tick_size", 16), automargin=True)
+    except Exception:
+        pass
+    try:
+        fig.update_yaxes(title_font_size=style.get("y_label_size", 20), tickfont_size=style.get("y_tick_size", 16), automargin=True)
+    except Exception:
+        pass
+    try:
+        legend_update = {
+            "font": dict(size=style.get("legend_size", 16)),
+            "title": dict(font=dict(size=style.get("legend_title_size", 17))),
+        }
+        preset_name = style.get("legend_position")
+        if preset_name in _LEGEND_LOCATION_PRESETS:
+            legend_update.update(_LEGEND_LOCATION_PRESETS[preset_name])
+        for style_key, legend_key in (
+            ("legend_x", "x"),
+            ("legend_y", "y"),
+            ("legend_xanchor", "xanchor"),
+            ("legend_yanchor", "yanchor"),
+            ("legend_orientation", "orientation"),
+            ("legend_traceorder", "traceorder"),
+            ("legend_bgcolor", "bgcolor"),
+            ("legend_bordercolor", "bordercolor"),
+            ("legend_borderwidth", "borderwidth"),
+        ):
+            if style_key in style:
+                legend_update[legend_key] = style[style_key]
+        fig.update_layout(legend=legend_update)
+    except Exception:
+        pass
+    try:
+        if style.get("line_width") is not None:
+            fig.update_traces(line=dict(width=float(style["line_width"])), selector=dict(type="scatter"))
+    except Exception:
+        pass
+    try:
+        if style.get("violin_line_width") is not None:
+            fig.update_traces(line=dict(width=float(style["violin_line_width"])), selector=dict(type="violin"))
+            fig.update_traces(line=dict(width=float(style["violin_line_width"])), selector=dict(type="box"))
+    except Exception:
+        pass
+    try:
+        if style.get("marker_line_width") is not None:
+            fig.update_traces(marker_line_width=float(style["marker_line_width"]), selector=dict(type="bar"))
+    except Exception:
+        pass
+    try:
+        if style.get("marker_size") is not None:
+            fig.update_traces(marker=dict(size=float(style["marker_size"])), selector=dict(type="scatter"))
+    except Exception:
+        pass
+    try:
+        fig.update_annotations(font_size=style.get("annotation_size", 16))
+    except Exception:
+        pass
+    return fig
+
+
+def plotly_export_size_for_name(fig: Any, name: str, width_default: int = 1320, height_default: int = 680) -> Tuple[int, int]:
+    style = _plot_text_style_for_name(fig, name)
+    return int(style.get("width", width_default)), int(style.get("height", height_default))
+
 
 
 def _coerce_int_config(value, default: int) -> int:
@@ -255,6 +438,8 @@ class HMD_helper:
             save_final (bool, optional): whether to also save enabled exports to the figures folder.
         """
         fig = apply_global_plotly_style(fig)
+        fig = apply_plotly_text_style_for_name(fig, name)
+        width, height = plotly_export_size_for_name(fig, name, width_default=width, height_default=height)
 
         # disable MathJax globally for Kaleido when available
         try:
@@ -500,7 +685,7 @@ class HMD_helper:
         visible_ticks = np.sort(np.unique(np.concatenate((negative_ticks, positive_ticks))))
 
         def _fmt_tick(value: float) -> str:
-            return str(int(value)) if float(value).is_integer() else f"{value:.2f}"
+            return _format_float_for_display(value)
 
         tick_labels = [_fmt_tick(float(t)) for t in visible_ticks]
 
@@ -576,7 +761,7 @@ class HMD_helper:
 
         # format text labels
         if show_text_labels:
-            fig.update_traces(texttemplate='%{text:.2f}')
+            fig.update_traces(texttemplate='%{text:.3g}')
 
         # stacked bar chart
         if stacked:
@@ -881,7 +1066,7 @@ class HMD_helper:
             fig.update_layout(yaxis=dict(
                 range=[min_y, original_max],
                 dtick=yaxis_step,
-                tickformat='.2f'
+                tickformat='.3g'
             ))
 
     def save_stats_csv(self, t, p_values, name_file):

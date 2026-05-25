@@ -26,13 +26,10 @@ import plotly.graph_objects as go  # noqa:F401
 from custom_logger import CustomLogger
 from helper import HMD_helper
 
-try:
-    from utils.HMD_helper import HMD_yaw  # type: ignore
-except Exception:  # pragma: no cover
-    from HMD_helper import HMD_yaw  # type: ignore
+from utils.HMD_helper import HMD_yaw  # type: ignore
 
 # Import helpers (kept as names to avoid editing the original function bodies)
-from csu_core import (
+from csu_core import (  # noqa:F401
     _choose_trial_file,
     _fisher_z,
     _np_trapezoid,
@@ -42,7 +39,9 @@ from csu_core import (
     _save_plot,
     _xcorr_max_r_lag,
     _zscore,
-    _humanise_label
+    _humanise_label,
+    _format_float_for_display,
+    _to_string_3dp
 )
 
 # Shared yaw or quaternion column heuristics.
@@ -52,6 +51,10 @@ from csu_yaw_constants import _YAW_CANDIDATES, _QUAT_REGEX, _QUAT_LIST_COL_PAT
 
 _HMD_YAW = HMD_yaw() if HMD_yaw is not None else None
 logger = CustomLogger(__name__)  # use custom logger
+
+# Trigger values below this proportion of the trigger range are treated as not pressed.
+# For 0--1 logs this is 0.05; for 0--100 logs this is 5.0.
+TRIGGER_UNSAFE_THRESHOLD = 0.05
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +393,8 @@ def _extract_yaw_features_from_timeseries(raw_df: pd.DataFrame, video_id: str, p
                                           yaw_col_candidates: list[str] | None = None,
                                           forward_cone_degs: list[float] | None = None,
                                           turn_threshold_degs: list[float] | None = None,
-                                          coupling_window_s: float = 1.0) -> dict:
+                                          coupling_window_s: float = 1.0,
+                                          unsafe_threshold: float = TRIGGER_UNSAFE_THRESHOLD) -> dict:
     if yaw_col_candidates is None:
         yaw_col_candidates = _YAW_CANDIDATES
     if forward_cone_degs is None:
@@ -597,7 +601,9 @@ def _extract_yaw_features_from_timeseries(raw_df: pd.DataFrame, video_id: str, p
         trig = trig[valid][order]
         trig = trig[uniq] if trig.size >= t.size else trig[:t.size]
 
-        unsafe = (trig > 0).astype(int)
+        trigger_scale = _trigger_scale_guess(trig)
+        trigger_press_cutoff = float(unsafe_threshold) * float(trigger_scale)
+        unsafe = (trig > trigger_press_cutoff).astype(int)
         if unsafe.size >= 2:
             changes = np.diff(unsafe)
             starts = list(np.where(changes == 1)[0] + 1)
@@ -733,7 +739,8 @@ def _extract_yaw_features_from_timeseries(raw_df: pd.DataFrame, video_id: str, p
 
 def compute_yaw_features_dataset(data_folder: str, mapping_df: pd.DataFrame, dataset_label: str,
                                  out_csv: Optional[str] = None, time_col: str = "Timestamp",
-                                 trigger_col: str = "TriggerValueRight") -> pd.DataFrame:
+                                 trigger_col: str = "TriggerValueRight",
+                                 unsafe_threshold: float = TRIGGER_UNSAFE_THRESHOLD) -> pd.DataFrame:
     if not os.path.isdir(data_folder):
         logger.warning(f"[YAW] data_folder not found: {data_folder}")
         return pd.DataFrame()
@@ -791,6 +798,7 @@ def compute_yaw_features_dataset(data_folder: str, mapping_df: pd.DataFrame, dat
                 dataset_label=dataset_label,
                 time_col=time_col,
                 trigger_col=trigger_col,
+                unsafe_threshold=unsafe_threshold,
             )
             # keep only rows where yaw metrics were actually computed
             if any(k.startswith("yaw_") or k.startswith("head_turn_") for k in rec.keys()):
@@ -1031,7 +1039,7 @@ def summarize_and_plot_yaw_results(
 
     grp_cam_txt = os.path.join(out_root, "yaw_summary_by_context.txt")
     with open(grp_cam_txt, "w") as f:
-        f.write(grp_cam.to_string(index=False))
+        f.write(_to_string_3dp(grp_cam, index=False))
         f.write("\n")
     logger.info(f"[YAW] wrote: {grp_cam_txt}")
 
@@ -1042,7 +1050,7 @@ def summarize_and_plot_yaw_results(
     # (optional) keep the historical txt name
     grp_ds_txt = os.path.join(out_root, "yaw_summary_by_dataset.txt")
     with open(grp_ds_txt, "w") as f:
-        f.write(grp_ds.to_string(index=False))
+        f.write(_to_string_3dp(grp_ds, index=False))
         f.write("\n")
     logger.info(f"[YAW] wrote: {grp_ds_txt}")
 
@@ -1115,7 +1123,7 @@ def summarize_and_plot_yaw_results(
             text="pct_within",
             title="Head-yaw forward-looking (pct_within) by context (mean ± SEM, participant-aggregated)",
         )
-        fig.update_traces(texttemplate="%{text:.2f}", textposition="outside", cliponaxis=False)
+        fig.update_traces(texttemplate="%{text:.3g}", textposition="outside", cliponaxis=False)
         ymin = float(np.nanmin(grp_ctx["pct_within"])) if grp_ctx["pct_within"].notna().any() else 0.0
         ymax = float(np.nanmax(grp_ctx["pct_within"])) if grp_ctx["pct_within"].notna().any() else 1.0
         y0, y1 = _axis_margin(ymin, ymax, min_margin=0.8)
@@ -1164,7 +1172,7 @@ def summarize_and_plot_yaw_results(
                 text="pct_within",
                 title="Head-yaw forward-looking (pct_within) by context × camera (mean ± SEM, participant-aggregated)",
             )
-            fig2.update_traces(texttemplate="%{text:.2f}", textposition="outside", cliponaxis=False)
+            fig2.update_traces(texttemplate="%{text:.3g}", textposition="outside", cliponaxis=False)
             ymin2 = float(np.nanmin(grp_cam2["pct_within"])) if grp_cam2["pct_within"].notna().any() else 0.0
             ymax2 = float(np.nanmax(grp_cam2["pct_within"])) if grp_cam2["pct_within"].notna().any() else 1.0
             y0, y1 = _axis_margin(ymin2, ymax2, min_margin=0.8)
@@ -1320,6 +1328,7 @@ def _compute_trigger_features_one_trial(
     time_col: str,
     thresholds: Tuple[float, ...] = (0.10, 0.30, 0.50),
     analysis_window: str = "crossing",
+    unsafe_threshold: float = TRIGGER_UNSAFE_THRESHOLD,
 ) -> dict:
     """Compute a compact set of trial-level trigger features."""
 
@@ -1373,8 +1382,13 @@ def _compute_trigger_features_one_trial(
     t0 = float(t[0])
     t_rel = t - t0
 
-    # primary unsafe definition: any nonzero trigger
-    unsafe = trig > 0
+    # Primary unsafe definition: trigger press above 5% of the inferred trigger range.
+    # This maps to >0.05 for 0--1 logs and >5.0 for 0--100 logs.
+    trigger_scale = _trigger_scale_guess(trig)
+    trigger_press_cutoff = float(unsafe_threshold) * float(trigger_scale)
+    rec["trigger_press_threshold_prop"] = float(unsafe_threshold)
+    rec["trigger_press_cutoff"] = float(trigger_press_cutoff)
+    unsafe = trig > trigger_press_cutoff
 
     # time-weighted unsafe fraction
     if t_rel.size >= 2:
@@ -1430,8 +1444,8 @@ def _compute_trigger_features_one_trial(
     rec["mean_unsafe_bout_s"] = float(np.mean(durs)) if durs else float("nan")
     rec["max_unsafe_bout_s"] = float(np.max(durs)) if durs else float("nan")
 
-    # thresholded occupancy (robust to 0–1 vs 0–100 trigger scaling)
-    scale = _trigger_scale_guess(trig)
+    # thresholded occupancy (robust to 0--1 vs 0--100 trigger scaling)
+    scale = float(trigger_scale)
     rec["trigger_scale_inferred"] = float(scale)
     for thr in thresholds:
         cut = float(thr) * float(scale)
@@ -1463,6 +1477,7 @@ def compute_trigger_features_dataset(
     thresholds: Tuple[float, ...] = (0.10, 0.30, 0.50),
     analysis_window: str = "crossing",
     include_baseline: bool = False,
+    unsafe_threshold: float = TRIGGER_UNSAFE_THRESHOLD,
 ) -> pd.DataFrame:
     """Extract per-participant × per-video trigger (unsafety) features.
 
@@ -1548,6 +1563,7 @@ def compute_trigger_features_dataset(
                 time_col=time_col,
                 thresholds=thresholds,
                 analysis_window=analysis_window,
+                unsafe_threshold=unsafe_threshold,
             )
             if used_fp:
                 rec["source_file"] = os.path.basename(used_fp)
