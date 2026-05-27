@@ -216,14 +216,8 @@ Trial level distribution of Q3 ratings across the randomised and fixed order dat
 [![Q3 versus unsafety volatility](figures/scatter_Q3_vs_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_Q3_vs_dtrigger_sd.html)
 Trial level association between Q3 ratings and unsafety volatility. The figure shows whether higher subjective ratings are aligned with more variable continuous unsafety responses.
 
-[![Q3 versus unsafety volatility](figures/scatter_Q3_vs_trigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_Q3_vs_trigger_sd.html)
-Trial level association between Q3 ratings and unsafety volatility. Use this entry if your exported file uses trigger_sd rather than dtrigger_sd in the filename.
-
 [![Q3 versus number of trigger transitions](figures/scatter_Q3_vs_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_Q3_vs_n_transitions.html)
 Trial level association between Q3 ratings and the number of transitions in the trigger signal.
-
-[![Q3 versus number of trigger transitions](figures/scatter_Q3_vs_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_Q3_vs_transitions.html)
-Trial level association between Q3 ratings and the number of transitions in the trigger signal. Use this entry if your exported file uses transitions rather than n_transitions in the filename.
 
 [![Q2 versus fraction of trial time in unsafe zone](figures/scatter_Q2_vs_frac_time_unsafe.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_Q2_vs_frac_time_unsafe.html)
 Trial level association between Q2 ratings and the fraction of trial time spent in the unsafe zone.
@@ -242,9 +236,6 @@ Trial level association between average head yaw speed in the one second before 
 
 [![Head yaw standard deviation versus unsafety volatility](figures/scatter_yaw_sd_vs_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_yaw_sd_vs_dtrigger_sd.html)
 Trial level coupling between head yaw variability and volatility of the continuous unsafety signal.
-
-[![Head yaw standard deviation versus unsafety volatility](figures/scatter_yaw_sd_vs_trigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_yaw_sd_vs_trigger_sd.html)
-Trial level coupling between head yaw variability and volatility of the continuous unsafety signal. Use this entry if your exported file uses trigger_sd rather than dtrigger_sd in the filename.
 
 [![Forward looking fraction versus Q3](figures/scatter_yaw_forward_frac_15_vs_Q3.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/scatter_yaw_forward_frac_15_vs_Q3.html)
 Trial level association between the fraction of time looking forward within fifteen degrees and Q3 ratings.
@@ -345,12 +336,6 @@ Forest plot of dataset by trial position interaction coefficients from the learn
 [![Sequential dataset interaction coefficients](figures/MM3_forest_sequential.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM3_forest_sequential.html)
 Forest plot of dataset interactions for lag and switch terms in the sequential models.
 
-[![Trial completion per participant](figures/between_subject_trial_completion_violin.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_trial_completion_violin.html)
-Participant level distribution of the number of completed main trials by dataset.
-
-[![Completion fraction per participant](figures/between_subject_completion_fraction_violin.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_completion_fraction_violin.html)
-Participant level distribution of completion fraction relative to the dataset median number of main trials.
-
 [![Mean continuous unsafety by dataset and yielding condition](figures/MM1_means_trigger_mean_dataset_yielding.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM1_means_trigger_mean_dataset_yielding.html)
 Descriptive means plot for mean continuous unsafety by dataset and yielding condition.
 
@@ -365,9 +350,6 @@ Descriptive lag scatter for mean continuous unsafety, showing the relation betwe
 
 [![Equivalence test for dataset by yielding interaction on mean continuous unsafety](figures/MM4_equivalence_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM4_equivalence_trigger_mean.html)
 Equivalence plot for the dataset by yielding interaction coefficient on mean continuous unsafety, showing the confidence interval relative to the equivalence bounds.
-
-[![Per participant missingness for mean continuous unsafety](figures/between_subject_missingness_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_missingness_trigger_mean.html)
-Participant level distribution of missingness for mean continuous unsafety across datasets.
 
 [![Baseline mean of mean continuous unsafety in the first main trials](figures/between_subject_baseline_mean_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_baseline_mean_trigger_mean.html)
 Participant level distribution of baseline mean mean continuous unsafety computed from the first main trials of the session.
@@ -387,12 +369,6 @@ Descriptive lag scatter for number of trigger transitions, showing the relation 
 [![Equivalence test for dataset by yielding interaction on number of trigger transitions](figures/MM4_equivalence_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM4_equivalence_n_transitions.html)
 Equivalence plot for the dataset by yielding interaction coefficient on number of trigger transitions, showing the confidence interval relative to the equivalence bounds.
 
-[![Per participant missingness for number of trigger transitions](figures/between_subject_missingness_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_missingness_n_transitions.html)
-Participant level distribution of missingness for number of trigger transitions across datasets.
-
-[![Baseline mean of number of trigger transitions in the first main trials](figures/between_subject_baseline_mean_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_baseline_mean_n_transitions.html)
-Participant level distribution of baseline mean number of trigger transitions computed from the first main trials of the session.
-
 [![Q3 rating by dataset and yielding condition](figures/MM1_means_Q3_dataset_yielding.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM1_means_Q3_dataset_yielding.html)
 Descriptive means plot for Q3 rating by dataset and yielding condition.
 
@@ -407,9 +383,6 @@ Descriptive lag scatter for Q3 rating, showing the relation between the current 
 
 [![Equivalence test for dataset by yielding interaction on Q3 rating](figures/MM4_equivalence_Q3.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM4_equivalence_Q3.html)
 Equivalence plot for the dataset by yielding interaction coefficient on Q3 rating, showing the confidence interval relative to the equivalence bounds.
-
-[![Per participant missingness for Q3 rating](figures/between_subject_missingness_Q3.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_missingness_Q3.html)
-Participant level distribution of missingness for Q3 rating across datasets.
 
 [![Baseline mean of Q3 rating in the first main trials](figures/between_subject_baseline_mean_Q3.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_baseline_mean_Q3.html)
 Participant level distribution of baseline mean Q3 rating computed from the first main trials of the session.
@@ -429,9 +402,6 @@ Descriptive lag scatter for head yaw standard deviation, showing the relation be
 [![Equivalence test for dataset by yielding interaction on head yaw standard deviation](figures/MM4_equivalence_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM4_equivalence_yaw_sd.html)
 Equivalence plot for the dataset by yielding interaction coefficient on head yaw standard deviation, showing the confidence interval relative to the equivalence bounds.
 
-[![Per participant missingness for head yaw standard deviation](figures/between_subject_missingness_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_missingness_yaw_sd.html)
-Participant level distribution of missingness for head yaw standard deviation across datasets.
-
 [![Baseline mean of head yaw standard deviation in the first main trials](figures/between_subject_baseline_mean_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_baseline_mean_yaw_sd.html)
 Participant level distribution of baseline mean head yaw standard deviation computed from the first main trials of the session.
 
@@ -450,17 +420,142 @@ Descriptive lag scatter for fraction of trial time in unsafe zone, showing the r
 [![Equivalence test for dataset by yielding interaction on fraction of trial time in unsafe zone](figures/MM4_equivalence_frac_time_unsafe.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/MM4_equivalence_frac_time_unsafe.html)
 Equivalence plot for the dataset by yielding interaction coefficient on fraction of trial time in unsafe zone, showing the confidence interval relative to the equivalence bounds.
 
-[![Per participant missingness for fraction of trial time in unsafe zone](figures/between_subject_missingness_frac_time_unsafe.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_missingness_frac_time_unsafe.html)
-Participant level distribution of missingness for fraction of trial time in unsafe zone across datasets.
-
 [![Baseline mean of fraction of trial time in unsafe zone in the first main trials](figures/between_subject_baseline_mean_frac_time_unsafe.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_baseline_mean_frac_time_unsafe.html)
 Participant level distribution of baseline mean fraction of trial time in unsafe zone computed from the first main trials of the session.
 
-## Data dependent questionnaire moderation figures
+## Additional generated figures
 
-[![Questionnaire moderator versus participant outcome](figures/F1_scatter_<moderator>_vs_<outcome>.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/F1_scatter_<moderator>_vs_<outcome>.html)
-Template for the questionnaire moderation scatter plots. Replace <moderator> and <outcome> with the exported names used in your run.
+[![Post break reset for Q3 ratings](figures/compare_participant_violin_E_breakreset_Q3.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_breakreset_Q3.html)
+Participant level distribution of post break reset for Q3 ratings by ordering group.
 
-[![Participant outcome by questionnaire median split](figures/F1_violin_<outcome>_by_<moderator>_median_split.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/F1_violin_<outcome>_by_<moderator>_median_split.html)
-Template for the questionnaire moderation violin plots. Replace <moderator> and <outcome> with the exported names used in your run.
+[![Post break reset for unsafety volatility](figures/compare_participant_violin_E_breakreset_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_breakreset_dtrigger_sd.html)
+Participant level distribution of post break reset for unsafety volatility by ordering group.
 
+[![Post break reset for number of trigger transitions](figures/compare_participant_violin_E_breakreset_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_breakreset_n_transitions.html)
+Participant level distribution of post break reset for number of trigger transitions by ordering group.
+
+[![Post break reset for mean continuous unsafety](figures/compare_participant_violin_E_breakreset_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_breakreset_trigger_mean.html)
+Participant level distribution of post break reset for mean continuous unsafety by ordering group.
+
+[![Post break reset for head yaw standard deviation](figures/compare_participant_violin_E_breakreset_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_breakreset_yaw_sd.html)
+Participant level distribution of post break reset for head yaw standard deviation by ordering group.
+
+[![Carryover of previous trial yielding for number of trigger transitions](figures/compare_participant_violin_E_carryover_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_n_transitions.html)
+Participant level distribution of carryover of previous trial yielding for number of trigger transitions by ordering group.
+
+[![Carryover of previous trial camera or visibility condition for unsafety volatility](figures/compare_participant_violin_E_carryover_prev_camera_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_camera_dtrigger_sd.html)
+Participant level distribution of carryover of previous trial camera or visibility condition for unsafety volatility by ordering group.
+
+[![Carryover of previous trial camera or visibility condition for number of trigger transitions](figures/compare_participant_violin_E_carryover_prev_camera_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_camera_n_transitions.html)
+Participant level distribution of carryover of previous trial camera or visibility condition for number of trigger transitions by ordering group.
+
+[![Carryover of previous trial camera or visibility condition for mean continuous unsafety](figures/compare_participant_violin_E_carryover_prev_camera_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_camera_trigger_mean.html)
+Participant level distribution of carryover of previous trial camera or visibility condition for mean continuous unsafety by ordering group.
+
+[![Carryover of previous trial camera or visibility condition for head yaw standard deviation](figures/compare_participant_violin_E_carryover_prev_camera_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_camera_yaw_sd.html)
+Participant level distribution of carryover of previous trial camera or visibility condition for head yaw standard deviation by ordering group.
+
+[![Carryover of previous trial pedestrian distance for unsafety volatility](figures/compare_participant_violin_E_carryover_prev_distPed_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_distPed_dtrigger_sd.html)
+Participant level distribution of carryover of previous trial pedestrian distance for unsafety volatility by ordering group.
+
+[![Carryover of previous trial pedestrian distance for number of trigger transitions](figures/compare_participant_violin_E_carryover_prev_distPed_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_distPed_n_transitions.html)
+Participant level distribution of carryover of previous trial pedestrian distance for number of trigger transitions by ordering group.
+
+[![Carryover of previous trial pedestrian distance for mean continuous unsafety](figures/compare_participant_violin_E_carryover_prev_distPed_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_distPed_trigger_mean.html)
+Participant level distribution of carryover of previous trial pedestrian distance for mean continuous unsafety by ordering group.
+
+[![Carryover of previous trial pedestrian distance for head yaw standard deviation](figures/compare_participant_violin_E_carryover_prev_distPed_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_distPed_yaw_sd.html)
+Participant level distribution of carryover of previous trial pedestrian distance for head yaw standard deviation by ordering group.
+
+[![Carryover of previous trial ehmi status for unsafety volatility](figures/compare_participant_violin_E_carryover_prev_eHMIOn_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_eHMIOn_dtrigger_sd.html)
+Participant level distribution of carryover of previous trial eHMI status for unsafety volatility by ordering group.
+
+[![Carryover of previous trial ehmi status for number of trigger transitions](figures/compare_participant_violin_E_carryover_prev_eHMIOn_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_eHMIOn_n_transitions.html)
+Participant level distribution of carryover of previous trial eHMI status for number of trigger transitions by ordering group.
+
+[![Carryover of previous trial ehmi status for mean continuous unsafety](figures/compare_participant_violin_E_carryover_prev_eHMIOn_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_eHMIOn_trigger_mean.html)
+Participant level distribution of carryover of previous trial eHMI status for mean continuous unsafety by ordering group.
+
+[![Carryover of previous trial ehmi status for head yaw standard deviation](figures/compare_participant_violin_E_carryover_prev_eHMIOn_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_prev_eHMIOn_yaw_sd.html)
+Participant level distribution of carryover of previous trial eHMI status for head yaw standard deviation by ordering group.
+
+[![Carryover of previous trial yielding for head yaw standard deviation](figures/compare_participant_violin_E_carryover_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_carryover_yaw_sd.html)
+Participant level distribution of carryover of previous trial yielding for head yaw standard deviation by ordering group.
+
+[![Early to late drift for unsafety volatility](figures/compare_participant_violin_E_drift_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_drift_dtrigger_sd.html)
+Participant level distribution of early to late drift for unsafety volatility by ordering group.
+
+[![Early to late drift for number of trigger transitions](figures/compare_participant_violin_E_drift_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_drift_n_transitions.html)
+Participant level distribution of early to late drift for number of trigger transitions by ordering group.
+
+[![Early to late drift for mean continuous unsafety](figures/compare_participant_violin_E_drift_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_drift_trigger_mean.html)
+Participant level distribution of early to late drift for mean continuous unsafety by ordering group.
+
+[![Early to late drift for head yaw standard deviation](figures/compare_participant_violin_E_drift_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_drift_yaw_sd.html)
+Participant level distribution of early to late drift for head yaw standard deviation by ordering group.
+
+[![Linear slope for unsafety volatility](figures/compare_participant_violin_E_slope_dtrigger_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_slope_dtrigger_sd.html)
+Participant level distribution of linear slope for unsafety volatility by ordering group.
+
+[![Linear slope for number of trigger transitions](figures/compare_participant_violin_E_slope_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_slope_n_transitions.html)
+Participant level distribution of linear slope for number of trigger transitions by ordering group.
+
+[![Linear slope for mean continuous unsafety](figures/compare_participant_violin_E_slope_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_slope_trigger_mean.html)
+Participant level distribution of linear slope for mean continuous unsafety by ordering group.
+
+[![Linear slope for head yaw standard deviation](figures/compare_participant_violin_E_slope_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_E_slope_yaw_sd.html)
+Participant level distribution of linear slope for head yaw standard deviation by ordering group.
+
+[![Q3 iqr late minus early by dataset](figures/compare_participant_violin_Q3_iqr_late_minus_early.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_Q3_iqr_late_minus_early.html)
+Participant level distribution of late minus early change in the interquartile range of Q3 ratings by ordering group.
+
+[![Q3 sd late minus early by dataset](figures/compare_participant_violin_Q3_sd_late_minus_early.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_Q3_sd_late_minus_early.html)
+Participant level distribution of late minus early change in the standard deviation of Q3 ratings by ordering group.
+
+[![Q3 within group sd mean by dataset](figures/compare_participant_violin_Q3_within_group_sd_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_Q3_within_group_sd_mean.html)
+Participant level distribution of mean within condition standard deviation of Q3 ratings by ordering group.
+
+[![Q3 within group sd weighted by dataset](figures/compare_participant_violin_Q3_within_group_sd_weighted.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_Q3_within_group_sd_weighted.html)
+Participant level distribution of weighted within condition standard deviation of Q3 ratings by ordering group.
+
+[![Dissoc mean abs z q2 minus unsafe by dataset](figures/compare_participant_violin_dissoc_mean_abs_z_Q2_minus_unsafe.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_dissoc_mean_abs_z_Q2_minus_unsafe.html)
+Participant level distribution of absolute dissociation between standardised Q2 ratings and unsafe time by ordering group.
+
+[![Z corr q2 trigger mean by dataset](figures/compare_participant_violin_z_corr_Q2_trigger_mean.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_z_corr_Q2_trigger_mean.html)
+Participant level distribution of participant level Fisher z correlation between Q2 and mean unsafety by ordering group.
+
+[![Z corr q2 unsafe by dataset](figures/compare_participant_violin_z_corr_Q2_unsafe.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_z_corr_Q2_unsafe.html)
+Participant level distribution of participant level Fisher z correlation between Q2 and unsafe time fraction by ordering group.
+
+[![Z corr q3 release yielding by dataset](figures/compare_participant_violin_z_corr_Q3_release_yielding.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_z_corr_Q3_release_yielding.html)
+Participant level distribution of participant level Fisher z correlation between Q3 and first release latency in yielding trials by ordering group.
+
+[![Z corr q3 transitions by dataset](figures/compare_participant_violin_z_corr_Q3_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_z_corr_Q3_transitions.html)
+Participant level distribution of participant level Fisher z correlation between Q3 and trigger transitions by ordering group.
+
+[![Z corr q3 volatility by dataset](figures/compare_participant_violin_z_corr_Q3_volatility.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_z_corr_Q3_volatility.html)
+Participant level distribution of participant level Fisher z correlation between Q3 and unsafety volatility by ordering group.
+
+[![Z corr yaw forward vs q3 by dataset](figures/compare_participant_violin_z_corr_yaw_forward_vs_Q3.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_z_corr_yaw_forward_vs_Q3.html)
+Participant level distribution of participant level Fisher z correlation between forward looking fraction and Q3 by ordering group.
+
+[![Z corr yaw sd vs volatility by dataset](figures/compare_participant_violin_z_corr_yaw_sd_vs_volatility.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/compare_participant_violin_z_corr_yaw_sd_vs_volatility.html)
+Participant level distribution of participant level Fisher z correlation between head yaw variability and unsafety volatility by ordering group.
+
+[![Number of trigger transitions over trial position](figures/curve_time_on_task_n_transitions.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/curve_time_on_task_n_transitions.html)
+Descriptive time on task curve for number of trigger transitions over trial position by dataset.
+
+[![Head yaw standard deviation over trial position](figures/curve_time_on_task_yaw_sd.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/curve_time_on_task_yaw_sd.html)
+Descriptive time on task curve for head yaw standard deviation over trial position by dataset.
+
+[![Forward looking fraction by dataset](figures/yaw_forward_frac_by_dataset.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/yaw_forward_frac_by_dataset.html)
+Trial level distribution of the fraction of samples in which participants looked approximately forward.
+
+[![Mean head yaw by dataset](figures/yaw_mean_by_dataset.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/yaw_mean_by_dataset.html)
+Trial level distribution of mean head yaw by dataset.
+
+[![Head yaw standard deviation by dataset](figures/yaw_sd_by_dataset.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/yaw_sd_by_dataset.html)
+Trial level distribution of head yaw standard deviation by dataset.
+
+[![Baseline mean of forward looking fraction within fifteen degrees](figures/between_subject_baseline_mean_yaw_forward_frac_15.png)](https://htmlpreview.github.io/?https://github.com/Shaadalam9/multiped-learning/blob/main/figures/between_subject_baseline_mean_yaw_forward_frac_15.html)
+Participant level distribution of baseline mean forward looking fraction within fifteen degrees computed from the first main trials of the session.

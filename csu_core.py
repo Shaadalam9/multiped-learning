@@ -26,12 +26,10 @@ from numpy.typing import NDArray
 import pandas as pd
 from scipy.stats import ttest_ind, linregress, pearsonr, mannwhitneyu
 
-import plotly.express as px  # noqa:F401
 import plotly.graph_objects as go  # noqa:F401
 
 import statsmodels.formula.api as smf  # noqa:F401
 import statsmodels.api as sm  # noqa:F401
-from statsmodels.stats.multitest import multipletests  # noqa:F401
 
 # Project helpers (used for plot output directories).
 from helper import HMD_helper, apply_global_plotly_style
@@ -54,6 +52,7 @@ logger = CustomLogger(__name__)  # use custom logger
 # with at most three decimal places. Small non-zero values are shown in
 # scientific notation so p values do not appear as exact zero.
 DISPLAY_DECIMALS = 3
+font_size = common.get_configs("font_size")
 
 
 def _format_float_for_display(value: float, decimals: int = DISPLAY_DECIMALS) -> str:
@@ -108,19 +107,6 @@ DATASET_COLOUR_MAP = {
 DATASET_COLOR_MAP = DATASET_COLOUR_MAP
 
 
-_LEGEND_LOCATION_PRESETS = {
-    "top_right": {"x": 0.99, "y": 0.99, "xanchor": "right", "yanchor": "top"},
-    "top_left": {"x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top"},
-    "top_center": {"x": 0.50, "y": 0.99, "xanchor": "center", "yanchor": "top"},
-    "bottom_right": {"x": 0.99, "y": 0.01, "xanchor": "right", "yanchor": "bottom"},
-    "bottom_left": {"x": 0.01, "y": 0.01, "xanchor": "left", "yanchor": "bottom"},
-    "bottom_center": {"x": 0.50, "y": 0.01, "xanchor": "center", "yanchor": "bottom"},
-    "right_center": {"x": 0.99, "y": 0.50, "xanchor": "right", "yanchor": "middle"},
-    "left_center": {"x": 0.01, "y": 0.50, "xanchor": "left", "yanchor": "middle"},
-    "outside_right": {"x": 1.02, "y": 0.99, "xanchor": "left", "yanchor": "top"},
-}
-
-
 # ---------------------------------------------------------------------------
 # Per-figure text size controls for exported Plotly figures
 # ---------------------------------------------------------------------------
@@ -130,7 +116,7 @@ _LEGEND_LOCATION_PRESETS = {
 #
 # Available keys in a style dictionary:
 #   x_label_size, y_label_size, x_tick_size, y_tick_size,
-#   legend_size, legend_title_size, legend_x, legend_y,
+#   legend_size, legend_title_size, legend_title_text, legend_x, legend_y,
 #   legend_xanchor, legend_yanchor, legend_orientation,
 #   line_width, violin_line_width, marker_line_width, marker_size,
 #   title_size, annotation_size, font_size, width, height
@@ -142,15 +128,15 @@ _LEGEND_LOCATION_PRESETS = {
 # These settings are applied centrally before HTML/PNG/EPS export, so all bar,
 # line, scatter and violin plots can be controlled from one place.
 PLOT_TEXT_SIZE_DEFAULT: Dict[str, Any] = {
-    "font_size": 18,
-    "x_label_size": 20,
-    "y_label_size": 20,
-    "x_tick_size": 16,
-    "y_tick_size": 16,
-    "legend_size": 16,
-    "legend_title_size": 17,
-    "title_size": 20,
-    "annotation_size": 16,
+    "font_size": font_size - 4,
+    "x_label_size": font_size,
+    "y_label_size": font_size,
+    "x_tick_size": font_size - 4,
+    "y_tick_size": font_size - 4,
+    "legend_size": font_size - 4,
+    "legend_title_size": font_size - 4,
+    "title_size": font_size,
+    "annotation_size": font_size - 4,
     "width": 1320,
     "height": 680,
 }
@@ -198,43 +184,37 @@ PLOT_TEXT_SIZE_BY_KIND: Dict[str, Dict[str, Any]] = {
 PLOT_TEXT_SIZE_BY_NAME: Dict[str, Dict[str, Any]] = {
     # Main manuscript line plots
     "curve_time_on_task_trigger_mean": {
-        "x_label_size": 28,
-        "y_label_size": 28,
-        "x_tick_size": 23,
-        "y_tick_size": 23,
-        "legend_size": 22,
-        "legend_x": 0.18,
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 34,
+        "y_tick_size": 34,
+        "legend_size": 34,
+        "legend_x": 0.25,
         "legend_y": 0.98,
-        "legend_xanchor": "right",
-        "legend_yanchor": "top",
         "legend_orientation": "v",
         "line_width": 4,
         "height": 820,
     },
     "curve_time_on_task_Q3": {
-        "x_label_size": 28,
-        "y_label_size": 28,
-        "x_tick_size": 23,
-        "y_tick_size": 23,
-        "legend_size": 22,
-        "legend_x": 0.98,
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 34,
+        "y_tick_size": 34,
+        "legend_size": 34,
+        "legend_x": 0.25,
         "legend_y": 0.98,
-        "legend_xanchor": "right",
-        "legend_yanchor": "top",
         "legend_orientation": "v",
         "line_width": 4,
         "height": 820,
     },
     "curve_time_on_task_dtrigger_sd": {
-        "x_label_size": 28,
-        "y_label_size": 28,
-        "x_tick_size": 23,
-        "y_tick_size": 23,
-        "legend_size": 22,
-        "legend_x": 0.98,
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 34,
+        "y_tick_size": 34,
+        "legend_size": 34,
+        "legend_x": 0.25,
         "legend_y": 0.98,
-        "legend_xanchor": "right",
-        "legend_yanchor": "top",
         "legend_orientation": "v",
         "line_width": 4,
         "height": 820,
@@ -242,35 +222,33 @@ PLOT_TEXT_SIZE_BY_NAME: Dict[str, Dict[str, Any]] = {
 
     # Appendix latency event absence line plots
     "missingness_press_over_trial": {
-        "x_label_size": 26,
-        "y_label_size": 26,
-        "x_tick_size": 22,
-        "y_tick_size": 22,
-        "legend_size": 20,
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 36,
+        "legend_title_text": "",
         "legend_x": 0.98,
         "legend_y": 0.98,
-        "legend_xanchor": "right",
-        "legend_yanchor": "top",
         "legend_orientation": "v",
         "line_width": 4,
         "height": 780,
     },
     "missingness_release_over_trial": {
-        "x_label_size": 26,
-        "y_label_size": 26,
-        "x_tick_size": 22,
-        "y_tick_size": 22,
-        "legend_size": 20,
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 36,
+        "legend_title_text": "",
         "legend_x": 0.98,
         "legend_y": 0.98,
-        "legend_xanchor": "right",
-        "legend_yanchor": "top",
         "legend_orientation": "v",
         "line_width": 4,
         "height": 780,
     },
 
-    # Appendix AUC bar plot
+    # AUC bar plot
     "F2_bar_auc_by_signal": {
         "x_label_size": 24,
         "y_label_size": 24,
@@ -282,65 +260,228 @@ PLOT_TEXT_SIZE_BY_NAME: Dict[str, Dict[str, Any]] = {
 
     # Exposure based figure panels
     "MM5_curve_Q3_exposure_yielding": {
-        "x_label_size": 26,
-        "y_label_size": 26,
-        "x_tick_size": 22,
-        "y_tick_size": 22,
-        "legend_size": 20,
-        "legend_x": 0.98,
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 36,
+        "legend_title_text": "",
+        "legend_x": 0.25,
         "legend_y": 0.98,
-        "legend_xanchor": "right",
-        "legend_yanchor": "top",
         "legend_orientation": "v",
         "line_width": 4,
         "height": 780,
     },
     "MM5_curve_Q3_exposure_eHMI": {
-        "x_label_size": 26,
-        "y_label_size": 26,
-        "x_tick_size": 22,
-        "y_tick_size": 22,
-        "legend_size": 20,
-        "legend_x": 0.98,
-        "legend_y": 0.98,
-        "legend_xanchor": "right",
-        "legend_yanchor": "top",
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 36,
+        "legend_title_text": "",
+        "legend_x": 0.85,
+        "legend_y": 0.18,
         "legend_orientation": "v",
         "line_width": 4,
         "height": 780,
     },
     "MM5_forest_exposure_interactions": {
-        "x_label_size": 24,
-        "y_label_size": 24,
-        "x_tick_size": 20,
-        "y_tick_size": 18,
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "marker_size": 11,
+        "width": 1500,
+        "height": 720,
+    },
+
+
+    # Trial-position factor drift plots
+    "factor_drift_yielding_over_trial_index": {
+        "x_label_size": 28,
+        "y_label_size": 28,
+        "x_tick_size": 23,
+        "y_tick_size": 23,
+        "legend_size": 22,
+        "legend_x": 0.85,
+        "legend_y": 0.98,
+        "legend_orientation": "v",
+        "line_width": 4,
+        "marker_size": 8,
         "height": 820,
+        "width": 1320,
+    },
+    "factor_drift_eHMIOn_over_trial_index": {
+        "x_label_size": 28,
+        "y_label_size": 28,
+        "x_tick_size": 23,
+        "y_tick_size": 23,
+        "legend_size": 22,
+        "legend_x": 0.8,
+        "legend_y": 0.98,
+        "legend_orientation": "v",
+        "line_width": 4,
+        "marker_size": 8,
+        "height": 820,
+        "width": 1320,
+    },
+
+    # Main manuscript participant-level learning and carryover violin plots
+    "compare_participant_violin_E_carryover_Q3": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
+    },
+    "compare_participant_violin_E_drift_Q3": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
+    },
+    "compare_participant_violin_E_slope_Q3": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
+    },
+    "compare_participant_violin_E_carryover_dtrigger_sd": {
+        "x_label_size": 28,
+        "y_label_size": 28,
+        "x_tick_size": 24,
+        "y_tick_size": 24,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
+    },
+    "compare_participant_violin_E_carryover_trigger_mean": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
+    },
+
+    # Additional carryover factor violin plots
+    "compare_participant_violin_E_carryover_prev_eHMIOn_Q3": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
+    },
+    "compare_participant_violin_E_carryover_prev_camera_Q3": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
+    },
+    "compare_participant_violin_E_carryover_prev_distPed_Q3": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "violin_line_width": 2.5,
+        "marker_size": 8,
+        "showlegend": False,
+        "height": 820,
+        "width": 1320,
     },
 
     # Reliability figures
-    "reliability_trigger_mean_odd_even": {"x_label_size": 24,
-                                          "y_label_size": 24,
-                                          "x_tick_size": 20,
-                                          "y_tick_size": 20,
-                                          "height": 760},
+    "reliability_trigger_mean_odd_even": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 30,
+        "legend_title_text": "",
+        "legend_x": 0.05,
+        "legend_y": 0.95,
+        "legend_xanchor": "left",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "marker_size": 12,
+        "height": 760,
+    },
 
-    "reliability_trigger_mean_early_late": {"x_label_size": 24,
-                                            "y_label_size": 24,
-                                            "x_tick_size": 20,
-                                            "y_tick_size": 20,
-                                            "height": 760},
+    "reliability_trigger_mean_early_late": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 30,
+        "legend_title_text": "",
+        "legend_x": 0.05,
+        "legend_y": 0.95,
+        "legend_xanchor": "left",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "marker_size": 12,
+        "height": 760,
+    },
 
-    "reliability_Q3_odd_even": {"x_label_size": 24,
-                                "y_label_size": 24,
-                                "x_tick_size": 20,
-                                "y_tick_size": 20,
-                                "height": 760},
+    "reliability_Q3_odd_even": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 30,
+        "legend_title_text": "",
+        "legend_x": 0.05,
+        "legend_y": 0.95,
+        "legend_xanchor": "left",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "marker_size": 12,
+        "height": 760,
+    },
 
-    "reliability_Q3_early_late": {"x_label_size": 24,
-                                  "y_label_size": 24,
-                                  "x_tick_size": 20,
-                                  "y_tick_size": 20,
-                                  "height": 760},
+    "reliability_Q3_early_late": {
+        "x_label_size": 40,
+        "y_label_size": 40,
+        "x_tick_size": 36,
+        "y_tick_size": 36,
+        "legend_size": 30,
+        "legend_title_text": "",
+        "legend_x": 0.05,
+        "legend_y": 0.95,
+        "legend_xanchor": "left",
+        "legend_yanchor": "top",
+        "legend_orientation": "v",
+        "marker_size": 12,
+        "height": 760,
+    },
 }
 
 # Wildcard overrides for groups of figures. Exact entries above still win.
@@ -352,27 +493,29 @@ PLOT_TEXT_SIZE_BY_PATTERN: List[Tuple[str, Dict[str, Any]]] = [
                                         "legend_size": 20,
                                         "legend_x": 0.98,
                                         "legend_y": 0.98,
-                                        "legend_xanchor": "right",
-                                        "legend_yanchor": "top",
                                         "violin_line_width": 2,
+                                        "showlegend": False,
                                         "height": 800}),
 
     ("compare_participant_violin_breakmatched_*", {"x_label_size": 24,
                                                    "y_label_size": 24,
                                                    "x_tick_size": 20,
                                                    "y_tick_size": 20,
+                                                   "showlegend": False,
                                                    "height": 760}),
 
     ("compare_participant_violin_*", {"x_label_size": 24,
                                       "y_label_size": 24,
                                       "x_tick_size": 20,
                                       "y_tick_size": 20,
+                                      "showlegend": False,
                                       "height": 760}),
 
     ("compare_violin_*", {"x_label_size": 24,
                           "y_label_size": 24,
                           "x_tick_size": 20,
                           "y_tick_size": 20,
+                          "showlegend": False,
                           "height": 760}),
 
     ("curve_time_on_task_*", {"x_label_size": 26,
@@ -382,8 +525,6 @@ PLOT_TEXT_SIZE_BY_PATTERN: List[Tuple[str, Dict[str, Any]]] = [
                               "legend_size": 20,
                               "legend_x": 0.98,
                               "legend_y": 0.98,
-                              "legend_xanchor": "right",
-                              "legend_yanchor": "top",
                               "line_width": 4,
                               "height": 800}),
 
@@ -394,8 +535,6 @@ PLOT_TEXT_SIZE_BY_PATTERN: List[Tuple[str, Dict[str, Any]]] = [
                                   "legend_size": 20,
                                   "legend_x": 0.98,
                                   "legend_y": 0.98,
-                                  "legend_xanchor": "right",
-                                  "legend_yanchor": "top",
                                   "line_width": 4,
                                   "height": 780}),
 
@@ -406,11 +545,31 @@ PLOT_TEXT_SIZE_BY_PATTERN: List[Tuple[str, Dict[str, Any]]] = [
                                           "legend_size": 18,
                                           "height": 760}),
 
-    ("F2_bar_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 18, "y_tick_size": 20, "height": 820}),
-    ("F2_roc_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18,
+    ("F2_bar_*", {"x_label_size": 24,
+                  "y_label_size": 24,
+                  "x_tick_size": 18,
+                  "y_tick_size": 20,
+                  "height": 820}),
+
+    ("F2_roc_*", {"x_label_size": 24,
+                  "y_label_size": 24,
+                  "x_tick_size": 20,
+                  "y_tick_size": 20,
+                  "legend_size": 18,
                   "height": 760}),
-    ("F1_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
-    ("F1_scatter_*", {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "height": 740}),
+
+    ("F1_violin_*", {"x_label_size": 24,
+                     "y_label_size": 24,
+                     "x_tick_size": 20,
+                     "y_tick_size": 20,
+                     "showlegend": False,
+                     "height": 760}),
+
+    ("F1_scatter_*", {"x_label_size": 22,
+                      "y_label_size": 22,
+                      "x_tick_size": 18,
+                      "y_tick_size": 18,
+                      "height": 740}),
 ]
 
 
@@ -459,6 +618,8 @@ def _apply_plot_text_style(fig: Any, name: str) -> Any:
             font=dict(size=style.get("font_size", PLOT_TEXT_SIZE_DEFAULT["font_size"])),
             title_font=dict(size=style.get("title_size", PLOT_TEXT_SIZE_DEFAULT["title_size"])),
         )
+        if not style.get("show_title", False):
+            fig.update_layout(title_text=None)
     except Exception:
         pass
 
@@ -483,11 +644,11 @@ def _apply_plot_text_style(fig: Any, name: str) -> Any:
     try:
         legend_update = {
             "font": dict(size=style.get("legend_size", PLOT_TEXT_SIZE_DEFAULT["legend_size"])),
-            "title": dict(font=dict(size=style.get("legend_title_size", PLOT_TEXT_SIZE_DEFAULT["legend_title_size"]))),
+            "title": dict(
+                text=style.get("legend_title_text", None),
+                font=dict(size=style.get("legend_title_size", PLOT_TEXT_SIZE_DEFAULT["legend_title_size"])),
+            ),
         }
-        preset_name = style.get("legend_position")
-        if preset_name in _LEGEND_LOCATION_PRESETS:
-            legend_update.update(_LEGEND_LOCATION_PRESETS[preset_name])
         for style_key, legend_key in (
             ("legend_x", "x"),
             ("legend_y", "y"),
@@ -506,8 +667,37 @@ def _apply_plot_text_style(fig: Any, name: str) -> Any:
         pass
 
     try:
+        if "showlegend" in style:
+            showlegend = bool(style["showlegend"])
+            fig.update_layout(showlegend=showlegend)
+            for tr in fig.data:
+                try:
+                    tr.showlegend = showlegend
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    try:
         if style.get("line_width") is not None:
-            fig.update_traces(line=dict(width=float(style["line_width"])), selector=dict(type="scatter"))
+            lw = float(style["line_width"])
+            for tr in fig.data:
+                try:
+                    if str(getattr(tr, "type", "")).lower() != "scatter":
+                        continue
+                    mode = str(getattr(tr, "mode", ""))
+                    if "lines" not in mode:
+                        continue
+                    line = getattr(tr, "line", None)
+                    current_width = getattr(line, "width", None) if line is not None else None
+                    hoverinfo = str(getattr(tr, "hoverinfo", "") or "").lower()
+                    fill = str(getattr(tr, "fill", "") or "").lower()
+                    # Do not turn hidden confidence-band boundary traces into visible lines.
+                    if current_width == 0 or hoverinfo == "skip" or fill not in {"", "none"}:
+                        continue
+                    tr.line.width = lw
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -532,6 +722,17 @@ def _apply_plot_text_style(fig: Any, name: str) -> Any:
 
     try:
         fig.update_annotations(font_size=style.get("annotation_size", PLOT_TEXT_SIZE_DEFAULT["annotation_size"]))
+    except Exception:
+        pass
+
+    # Mark figures styled by csu_core so helper.save_plotly does not reapply
+    # its own per-name defaults and override values edited here.
+    try:
+        existing_meta = getattr(fig.layout, "meta", None)
+        meta = dict(existing_meta) if isinstance(existing_meta, dict) else {}
+        meta["csu_core_style_applied"] = True
+        meta["csu_plot_name"] = str(name)
+        fig.update_layout(meta=meta)
     except Exception:
         pass
 
@@ -821,7 +1022,7 @@ def _sanitise_figure_for_export(fig: Any) -> Any:
                     DATASET_COLOUR_MAP["shuffled"],
                     DATASET_COLOUR_MAP["unshuffled"],
                 ],
-                legend_title_text="Dataset",
+                legend_title_text="",
             )
         except Exception:
             pass
@@ -1501,6 +1702,85 @@ def _resolve_plot_dirs(h: HMD_helper, out_root: Optional[str] = None) -> List[st
     return [d for d in out_dirs if d and not (d in seen or seen.add(d))]
 
 
+def _plotly_static_export_setup() -> None:
+    """Make Plotly static export more robust before writing PNG/EPS/PDF."""
+    try:
+        import plotly.io as pio  # local import so the module still imports without Plotly IO extras
+        try:
+            pio.kaleido.scope.mathjax = None
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _convert_pdf_to_eps(pdf_path: str, eps_path: str) -> tuple[bool, str]:
+    """Convert a Plotly PDF export to EPS using common command line tools."""
+    import shutil
+    import subprocess
+
+    pdftops = shutil.which("pdftops")
+    if pdftops:
+        try:
+            res = subprocess.run(
+                [pdftops, "-eps", pdf_path, eps_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if res.returncode == 0 and os.path.exists(eps_path) and os.path.getsize(eps_path) > 0:
+                return True, "pdftops"
+            return False, f"pdftops failed: {res.stderr.strip() or res.stdout.strip()}"
+        except Exception as e:
+            return False, f"pdftops exception: {e}"
+
+    return False, "pdftops not found"
+
+
+def _write_plotly_static_exports(fig: Any, base_path: str, width: int, height: int) -> Dict[str, str]:
+    """Write PNG and EPS for one Plotly figure.
+
+    EPS is attempted with direct Plotly export first. If that fails, a PDF is
+    exported and converted to EPS with pdftops. SVG export is intentionally not
+    used, because this project does not need SVG files.
+
+    Returns a mapping from extension to status text. The caller logs these statuses.
+    """
+    statuses: Dict[str, str] = {}
+    _plotly_static_export_setup()
+
+    png_path = f"{base_path}.png"
+    try:
+        fig.write_image(png_path, width=width, height=height)
+        statuses["png"] = "ok"
+    except Exception as e:
+        statuses["png"] = f"failed: {e}"
+
+    eps_path = f"{base_path}.eps"
+    try:
+        fig.write_image(eps_path, width=width, height=height)
+        if os.path.exists(eps_path) and os.path.getsize(eps_path) > 0:
+            statuses["eps"] = "ok"
+            return statuses
+        statuses["eps"] = "failed: empty EPS after direct export"
+    except Exception as e:
+        statuses["eps"] = f"direct failed: {e}"
+
+    pdf_path = f"{base_path}.pdf"
+    try:
+        fig.write_image(pdf_path, width=width, height=height)
+        ok, msg = _convert_pdf_to_eps(pdf_path, eps_path)
+        if ok:
+            statuses["eps"] = f"ok via {msg}"
+            return statuses
+        statuses["eps"] = statuses.get("eps", "") + f"; pdf conversion failed: {msg}"
+    except Exception as e:
+        statuses["eps"] = statuses.get("eps", "") + f"; pdf export failed: {e}"
+
+    return statuses
+
+
 def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, record_index: bool = True,
                open_browser: bool = True, save_final: bool = True) -> None:
     """
@@ -1599,13 +1879,20 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
                     except Exception:
                         continue
 
-                    # EPS backstop
+                    # Static export backstop. This is intentionally independent of
+                    # HMD_helper.save_plotly because some helper versions fail during
+                    # PDF-to-EPS conversion even when HTML was written correctly.
                     try:
-                        fig.write_image(os.path.join(d, f"{name}.eps"), width=export_width, height=export_height)
+                        statuses = _write_plotly_static_exports(fig, os.path.join(d, name), export_width, export_height)  # noqa:E501
+                        if statuses.get("eps", "").startswith("ok"):
+                            logger.info(f"[plot] EPS wrote: {os.path.join(d, f'{name}.eps')} ({statuses.get('eps')})")
+                        elif not _KALEIDO_WARNED:
+                            _KALEIDO_WARNED = True
+                            logger.warning(f"[plot] NOTE: EPS export failed for {name}: {statuses.get('eps')}")
                     except Exception as e:
                         if not _KALEIDO_WARNED:
                             _KALEIDO_WARNED = True
-                            logger.warning(f"[plot] NOTE: EPS export needs Kaleido. If missing, run: pip install -U kaleido. (first error: {e})")  # noqa: E501
+                            logger.warning(f"[plot] NOTE: static export failed for {name}: {e}")
 
                     # Remove PDF if the helper created one
                     try:
@@ -1660,29 +1947,18 @@ def _save_plot(h: HMD_helper, fig, name: str, out_root: Optional[str] = None, re
         except Exception as e:
             logger.error(f"[plot] FAILED html {html_path}: {e}")
 
-        # Make Kaleido more robust (MathJax is a frequent culprit).
+        # PNG and EPS. EPS is tried directly and then through PDF/SVG conversion.
         try:
-            import plotly.io as pio  # local import
-            try:
-                pio.kaleido.scope.mathjax = None
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-        # PNG
-        try:
-            fig.write_image(os.path.join(d, f"{name}.png"), width=export_width, height=export_height)
+            statuses = _write_plotly_static_exports(fig, os.path.join(d, name), export_width, export_height)
+            if statuses.get("eps", "").startswith("ok"):
+                logger.info(f"[plot] EPS wrote: {os.path.join(d, f'{name}.eps')} ({statuses.get('eps')})")
+            elif not _KALEIDO_WARNED:
+                _KALEIDO_WARNED = True
+                logger.warning(f"[plot] NOTE: EPS export failed for {name}: {statuses.get('eps')}")
         except Exception as e:
             if not _KALEIDO_WARNED:
                 _KALEIDO_WARNED = True
-                logger.warning(f"[plot] NOTE: PNG and EPS export needs Kaleido. If missing, run: pip install -U kaleido. (first error: {e})")  # noqa: E501
-
-        # EPS
-        try:
-            fig.write_image(os.path.join(d, f"{name}.eps"), width=export_width, height=export_height)
-        except Exception:
-            pass
+                logger.warning(f"[plot] NOTE: static export failed for {name}: {e}")
 
     # Open the primary HTML for this figure if requested
     if wrote_html and open_browser:

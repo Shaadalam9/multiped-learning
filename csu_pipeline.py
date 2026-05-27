@@ -428,11 +428,13 @@ def _prepare_analysis_inputs(mapping: pd.DataFrame, h: HMD_helper, reanalyse: bo
         if yaw_abs_col and trig_mean_col:
             for ds, g in all_features.groupby("dataset"):
                 r = _safe_corr(g[yaw_abs_col], g[trig_mean_col], min_n=10)
-                logger.info(f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: n/a")
+                corr = f"r={r:.3f}" if (r is not None and not np.isnan(r)) else "n/a"
+                logger.info(f"[stats] pooled corr({yaw_abs_col}, {trig_mean_col}) in {ds}: {corr}")
         if yaw_fwd_col and unsafe_col:
             for ds, g in all_features.groupby("dataset"):
                 r = _safe_corr(g[yaw_fwd_col], g[unsafe_col], min_n=10)
-                logger.info(f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: r={r:.3f}" if (r is not None and not np.isnan(r)) else f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: n/a")
+                corr = f"r={r:.3f}" if (r is not None and not np.isnan(r)) else "n/a"
+                logger.info(f"[stats] pooled corr({yaw_fwd_col}, {unsafe_col}) in {ds}: {corr}")
 
         try:
             summarize_and_plot_yaw_results(
@@ -886,7 +888,7 @@ def _plot_factor_drift_by_trial_index(df: pd.DataFrame, factor_col: str, title: 
     fig.update_layout(
         title=title,
         xaxis_title="Trial number",
-        yaxis_title=f"Proportion with {factor_col}=1",
+        yaxis_title=f"Proportion with {factor_col}",
         template="plotly_white",
         legend_title_text="Dataset",
     )
@@ -1928,7 +1930,8 @@ def _summarize_demographics_from_intake(dataset: str, intake_path: str, features
         logger.error("Gender: (column not found)")
 
     if n_age > 0:
-        logger.info(f"Age: mean={_format_float_for_display(age_mean)}, SD={_format_float_for_display(age_sd)} (n={n_age})")
+        age_msg = f"Age: mean={_format_float_for_display(age_mean)}, "
+        logger.info(f"{age_msg}SD={_format_float_for_display(age_sd)} (n={n_age})")
     else:
         logger.error("Age: (column not found / no numeric values)")
 
@@ -2392,11 +2395,9 @@ def _latency_missingness_analysis(trial_df: pd.DataFrame, out_root: str, h: HMD_
                 fig.update_layout(
                     title=title,
                     xaxis_title="Trial number",
-                    yaxis_title="Missingness proportion",
+                    yaxis_title="Event absence proportion",
                     yaxis=dict(range=[-0.05, 1.05]),
                     template="simple_white",
-                    legend=dict(x=0.98, y=0.98, xanchor="right", yanchor="top",
-                                bgcolor="rgba(255,255,255,0.7)", bordercolor="rgba(0,0,0,0.15)", borderwidth=1),
                     margin=dict(l=60, r=20, t=60, b=55),
                 )
                 fig.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)")
@@ -2574,6 +2575,65 @@ def main(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str,
                             _save_plot(h, fig, name=f"compare_participant_violin_breakmatched_{short}")
 
             # Plots for E (participant-level)
+            # Keep the exported figure labels short enough for manuscript subfigures.
+            # The full interpretation remains in the LaTeX caption/table text.
+            e_y_axis_labels = {
+                "carryover_prev_yielding_Q3": "Carryover on Q3",
+                "drift_late_minus_early_Q3": "Q3 change",
+                "carryover_prev_yielding_trigger_mean": "Carryover on unsafety",
+                "carryover_prev_eHMIOn_Q3": "eHMI carryover on Q3",
+                "carryover_prev_camera_Q3": "Camera carryover on Q3",
+                "carryover_prev_distPed_Q3": "Distance carryover on Q3",
+            }
+
+            def _short_e_y_axis_label(metric_col: str, outcome_col: str, metric_kind: str) -> str:
+                if metric_col in e_y_axis_labels:
+                    return e_y_axis_labels[metric_col]
+
+                outcome_labels = {
+                    "trigger_mean": "unsafety",
+                    "trigger_auc": "unsafety",
+                    "trigger_avg": "unsafety",
+                    "mean_trigger": "unsafety",
+                    "frac_time_unsafe": "unsafe time",
+                    "Q3": "Q3",
+                    "n_transitions": "transitions",
+                    "transitions": "transitions",
+                    "dtrigger_sd": "unsafety volatility",
+                    "trigger_sd": "unsafety volatility",
+                    "dtrigger_dt_sd": "unsafety volatility",
+                    "yaw_sd": "yaw SD",
+                    "yaw_iqr": "yaw IQR",
+                }
+                outcome_label = outcome_labels.get(outcome_col, _humanise_label(outcome_col))
+
+                if metric_kind == "slope":
+                    return f"Slope of {outcome_label}"
+                if metric_kind == "drift":
+                    return f"Change in {outcome_label}"
+                if metric_kind == "breakreset":
+                    return f"Break reset in {outcome_label}"
+                if metric_kind == "switchcost":
+                    return f"Switch cost in {outcome_label}"
+                if metric_kind == "carryover":
+                    return f"Carryover on {outcome_label}"
+                if metric_kind == "carryover_prev_eHMIOn":
+                    return f"eHMI carryover on {outcome_label}"
+                if metric_kind == "carryover_prev_camera":
+                    return f"Camera carryover on {outcome_label}"
+                if metric_kind == "carryover_prev_distPed":
+                    return f"Distance carryover on {outcome_label}"
+                return _humanise_label(metric_col)
+
+            e_panel_titles = {
+                "carryover_prev_yielding_Q3": "Previous yielding → Q3",
+                "drift_late_minus_early_Q3": "Q3 drift",
+                "carryover_prev_yielding_trigger_mean": "Previous yielding → unsafety",
+                "carryover_prev_eHMIOn_Q3": "Previous eHMI → Q3",
+                "carryover_prev_camera_Q3": "Previous camera → Q3",
+                "carryover_prev_distPed_Q3": "Previous distance → Q3",
+            }
+
             if px is not None:
                 for col in e_outcomes:
                     slope_c = f"slope_{col}"
@@ -2607,7 +2667,11 @@ def main(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str,
                                 points="all",
                                 hover_data=["participant_id"],
                             )
-                            fig.update_layout(title=f"E: {metric_name} ({col}) shuffled vs unshuffled (participant-level)")  # noqa: E501
+                            fig.update_layout(
+                                title=e_panel_titles.get(mc, ""),
+                                xaxis_title="",
+                                yaxis_title=_short_e_y_axis_label(mc, col, metric_name),
+                            )
                             _save_plot(h, fig, name=f"compare_participant_violin_E_{metric_name}_{col}")
 
                 for col in e_outcomes:
@@ -2625,7 +2689,7 @@ def main(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str,
                     )
                     fig.update_layout(
                         title=f"E: time-on-task drift curve for {col} (binned over trial position)",
-                        xaxis_title="Normalized trial position (0=start, 1=end)",
+                        xaxis_title="Normalised trial position",
                         yaxis_title=f"Mean {col}",
                     )
                     _save_plot(h, fig, name=f"curve_time_on_task_{col}")
@@ -2719,6 +2783,7 @@ def main(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str,
         )
         fig.update_layout(
             title="",
+            xaxis_title="",
             legend=dict(
                 x=0.085,
                 y=1.0,
@@ -3300,18 +3365,53 @@ def main(reanalyse: bool = False, cache_path: Optional[str] = None) -> Dict[str,
 
         # Plots
         if px is not None:
-            # Bar plot: AUC by signal and dataset
+            # Bar plot: AUC by signal and dataset.
+            # Use publication-friendly signal labels instead of raw column names
+            # such as ``frac_time_unsafe`` or ``yaw_forward_frac_15``.
+            f2_signal_label_map = {
+                "trigger_mean": "Mean unsafety",
+                "frac_time_unsafe": "Unsafe time fraction",
+                "n_transitions": "Transitions",
+                "dtrigger_sd": "Unsafety volatility",
+                "trigger_sd": "Unsafety variability",
+                "yaw_abs_mean": "Mean absolute yaw",
+                "yaw_forward_frac_15": "Forward yaw fraction",
+                "yaw_sd": "Yaw SD",
+                "yaw_entropy": "Yaw entropy",
+                "yaw_speed_mean": "Mean yaw speed",
+                "yaw_speed_p95": "95th percentile yaw speed",
+                "Q3": "Q3",
+            }
+
+            def _f2_signal_label(signal_name: object) -> str:
+                s = str(signal_name)
+                return f2_signal_label_map.get(s, _humanise_label(s))
+
+            auc_plot = auc_df.copy()
+            auc_plot["signal_label"] = auc_plot["signal"].map(_f2_signal_label)
+            signal_order = list(dict.fromkeys(auc_plot["signal"].astype(str).tolist()))
+            signal_label_order = [_f2_signal_label(s) for s in signal_order]
+
             fig = px.bar(
-                auc_df,
-                x="signal",
+                auc_plot,
+                x="signal_label",
                 y="auc",
                 color="dataset",
                 color_discrete_map=DATASET_COLOR_MAP,
-                category_orders={"dataset": ["shuffled", "unshuffled"]},
+                category_orders={
+                    "dataset": ["shuffled", "unshuffled"],
+                    "signal_label": signal_label_order,
+                },
                 barmode="group",
-                hover_data=["n"],
+                hover_data={"n": True, "signal": True, "signal_label": False},
+                labels={"signal_label": "Signal", "auc": "ROC AUC", "dataset": "Ordering group"},
             )
-            fig.update_layout(title="Yielding discriminability (ROC AUC) by signal")
+            fig.update_layout(
+                title="Yielding discriminability (ROC AUC) by signal",
+                xaxis_title="Signal",
+                yaxis_title="ROC AUC",
+            )
+            fig.update_xaxes(tickangle=-35)
             _save_plot(h, fig, name="F2_bar_auc_by_signal")
 
             # ROC curves for top 3 signals (pooled across datasets by mean AUC)

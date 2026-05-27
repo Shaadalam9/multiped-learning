@@ -95,18 +95,6 @@ def _resolve_data_folder(dataset: Optional[str] = None) -> str:
             return v
     return ""
 
-_LEGEND_LOCATION_PRESETS = {
-    "top_right": {"x": 0.99, "y": 0.99, "xanchor": "right", "yanchor": "top"},
-    "top_left": {"x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top"},
-    "top_center": {"x": 0.50, "y": 0.99, "xanchor": "center", "yanchor": "top"},
-    "bottom_right": {"x": 0.99, "y": 0.01, "xanchor": "right", "yanchor": "bottom"},
-    "bottom_left": {"x": 0.01, "y": 0.01, "xanchor": "left", "yanchor": "bottom"},
-    "bottom_center": {"x": 0.50, "y": 0.01, "xanchor": "center", "yanchor": "bottom"},
-    "right_center": {"x": 0.99, "y": 0.50, "xanchor": "right", "yanchor": "middle"},
-    "left_center": {"x": 0.01, "y": 0.50, "xanchor": "left", "yanchor": "middle"},
-    "outside_right": {"x": 1.02, "y": 0.99, "xanchor": "left", "yanchor": "top"},
-}
-
 
 # ---------------------------------------------------------------------------
 # Per-figure text size controls for exported Plotly figures
@@ -117,7 +105,7 @@ _LEGEND_LOCATION_PRESETS = {
 #
 # Available keys include:
 #   x_label_size, y_label_size, x_tick_size, y_tick_size,
-#   legend_size, legend_title_size, legend_x, legend_y,
+#   legend_size, legend_title_size, legend_title_text, legend_x, legend_y,
 #   legend_xanchor, legend_yanchor, legend_orientation,
 #   line_width, violin_line_width, marker_line_width, marker_size,
 #   title_size, annotation_size, font_size, width, height
@@ -136,40 +124,401 @@ PLOT_TEXT_SIZE_DEFAULT: Dict[str, Any] = {
 }
 
 PLOT_TEXT_SIZE_BY_KIND: Dict[str, Dict[str, Any]] = {
-    "bar": {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "legend_size": 18, "marker_line_width": 1, "height": 760},
-    "line": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18, "line_width": 3, "height": 760},
-    "violin": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18, "violin_line_width": 2, "height": 760},
-    "scatter": {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "legend_size": 17, "marker_size": 8, "height": 740},
+    "bar": {"x_label_size": 22,
+            "y_label_size": 22,
+            "x_tick_size": 18,
+            "y_tick_size": 18,
+            "legend_size": 18,
+            "marker_line_width": 1,
+            "height": 760},
+
+    "line": {"x_label_size": 24,
+             "y_label_size": 24,
+             "x_tick_size": 20,
+             "y_tick_size": 20,
+             "legend_size": 18,
+             "line_width": 3,
+             "height": 760},
+
+    "violin": {"x_label_size": 24,
+               "y_label_size": 24,
+               "x_tick_size": 20,
+               "y_tick_size": 20,
+               "legend_size": 18,
+               "violin_line_width": 2,
+               "height": 760},
+
+    "scatter": {"x_label_size": 22,
+                "y_label_size": 22,
+                "x_tick_size": 18,
+                "y_tick_size": 18,
+                "legend_size": 17,
+                "marker_size": 8,
+                "height": 740},
 }
 
 PLOT_TEXT_SIZE_BY_NAME: Dict[str, Dict[str, Any]] = {
-    "curve_time_on_task_trigger_mean": {"x_label_size": 28, "y_label_size": 28, "x_tick_size": 23, "y_tick_size": 23, "legend_size": 22, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 820},
-    "curve_time_on_task_Q3": {"x_label_size": 28, "y_label_size": 28, "x_tick_size": 23, "y_tick_size": 23, "legend_size": 22, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 820},
-    "curve_time_on_task_dtrigger_sd": {"x_label_size": 28, "y_label_size": 28, "x_tick_size": 23, "y_tick_size": 23, "legend_size": 22, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 820},
-    "missingness_press_over_trial": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
-    "missingness_release_over_trial": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
-    "F2_bar_auc_by_signal": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 18, "y_tick_size": 20, "legend_size": 18, "height": 820},
-    "MM5_curve_Q3_exposure_yielding": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
-    "MM5_curve_Q3_exposure_eHMI": {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_position": "top_right", "legend_orientation": "v", "line_width": 4, "height": 780},
-    "MM5_forest_exposure_interactions": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 18, "height": 820},
-    "reliability_trigger_mean_odd_even": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
-    "reliability_trigger_mean_early_late": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
-    "reliability_Q3_odd_even": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
-    "reliability_Q3_early_late": {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760},
+    "curve_time_on_task_trigger_mean": {"x_label_size": 28,
+                                        "y_label_size": 28,
+                                        "x_tick_size": 23,
+                                        "y_tick_size": 23,
+                                        "legend_size": 22,
+                                        "legend_x": 0.98,
+                                        "legend_y": 0.98,
+                                        "legend_xanchor": "right",
+                                        "legend_yanchor": "top",
+                                        "legend_orientation": "v",
+                                        "line_width": 4,
+                                        "height": 820},
+
+    "curve_time_on_task_Q3": {"x_label_size": 28,
+                              "y_label_size": 28,
+                              "x_tick_size": 23,
+                              "y_tick_size": 23,
+                              "legend_size": 22,
+                              "legend_x": 0.98,
+                              "legend_y": 0.98,
+                              "legend_xanchor": "right",
+                              "legend_yanchor": "top",
+                              "legend_orientation": "v",
+                              "line_width": 4,
+                              "height": 820},
+
+    "curve_time_on_task_dtrigger_sd": {"x_label_size": 28,
+                                       "y_label_size": 28,
+                                       "x_tick_size": 23,
+                                       "y_tick_size": 23,
+                                       "legend_size": 22,
+                                       "legend_x": 0.98,
+                                       "legend_y": 0.98,
+                                       "legend_xanchor": "right",
+                                       "legend_yanchor": "top",
+                                       "legend_orientation": "v",
+                                       "line_width": 4,
+                                       "height": 820},
+
+    "missingness_press_over_trial": {"x_label_size": 26,
+                                     "y_label_size": 26,
+                                     "x_tick_size": 22,
+                                     "y_tick_size": 22,
+                                     "legend_size": 20,
+                                     "legend_x": 0.98,
+                                     "legend_y": 0.98,
+                                     "legend_xanchor": "right",
+                                     "legend_yanchor": "top",
+                                     "legend_orientation": "v",
+                                     "line_width": 4,
+                                     "height": 780},
+
+    "missingness_release_over_trial": {"x_label_size": 26,
+                                       "y_label_size": 26,
+                                       "x_tick_size": 22,
+                                       "y_tick_size": 22,
+                                       "legend_size": 20,
+                                       "legend_x": 0.98,
+                                       "legend_y": 0.98,
+                                       "legend_xanchor": "right",
+                                       "legend_yanchor": "top",
+                                       "legend_orientation": "v",
+                                       "line_width": 4,
+                                       "height": 780},
+
+    "F2_bar_auc_by_signal": {"x_label_size": 24,
+                             "y_label_size": 24,
+                             "x_tick_size": 18,
+                             "y_tick_size": 20,
+                             "legend_size": 18,
+                             "height": 820},
+
+    "MM5_curve_Q3_exposure_yielding": {"x_label_size": 26,
+                                       "y_label_size": 26,
+                                       "x_tick_size": 22,
+                                       "y_tick_size": 22,
+                                       "legend_size": 20,
+                                       "legend_x": 0.98,
+                                       "legend_y": 0.98,
+                                       "legend_xanchor": "right",
+                                       "legend_yanchor": "top",
+                                       "legend_orientation": "v",
+                                       "line_width": 4,
+                                       "height": 780},
+
+    "MM5_curve_Q3_exposure_eHMI": {"x_label_size": 26,
+                                   "y_label_size": 26,
+                                   "x_tick_size": 22,
+                                   "y_tick_size": 22,
+                                   "legend_size": 20,
+                                   "legend_x": 0.98,
+                                   "legend_y": 0.98,
+                                   "legend_xanchor": "right",
+                                   "legend_yanchor": "top",
+                                   "legend_orientation": "v",
+                                   "line_width": 4,
+                                   "height": 780},
+
+    "MM5_forest_exposure_interactions": {"x_label_size": 24,
+                                         "y_label_size": 24,
+                                         "x_tick_size": 20,
+                                         "y_tick_size": 18,
+                                         "height": 820},
+
+
+    # Trial-position factor drift plots
+    "factor_drift_yielding_over_trial_index": {"x_label_size": 28,
+                                               "y_label_size": 28,
+                                               "x_tick_size": 23,
+                                               "y_tick_size": 23,
+                                               "legend_size": 22,
+                                               "legend_x": 0.98,
+                                               "legend_y": 0.98,
+                                               "legend_xanchor": "right",
+                                               "legend_yanchor": "top",
+                                               "legend_orientation": "v",
+                                               "line_width": 4,
+                                               "marker_size": 8,
+                                               "height": 820,
+                                               "width": 1320},
+
+    "factor_drift_eHMIOn_over_trial_index": {"x_label_size": 28,
+                                             "y_label_size": 28,
+                                             "x_tick_size": 23,
+                                             "y_tick_size": 23,
+                                             "legend_size": 22,
+                                             "legend_x": 0.98,
+                                             "legend_y": 0.98,
+                                             "legend_xanchor": "right",
+                                             "legend_yanchor": "top",
+                                             "legend_orientation": "v",
+                                             "line_width": 4,
+                                             "marker_size": 8,
+                                             "height": 820,
+                                             "width": 1320},
+
+    # Main manuscript participant-level learning and carryover violin plots
+    "compare_participant_violin_E_carryover_Q3": {"x_label_size": 28,
+                                                  "y_label_size": 28,
+                                                  "x_tick_size": 24,
+                                                  "y_tick_size": 24,
+                                                  "violin_line_width": 2.5,
+                                                  "marker_size": 8,
+                                                  "showlegend": False,
+                                                  "height": 820,
+                                                  "width": 1320},
+
+    "compare_participant_violin_E_drift_Q3": {"x_label_size": 28,
+                                              "y_label_size": 28,
+                                              "x_tick_size": 24,
+                                              "y_tick_size": 24,
+                                              "violin_line_width": 2.5,
+                                              "marker_size": 8,
+                                              "showlegend": False,
+                                              "height": 820,
+                                              "width": 1320},
+
+    "compare_participant_violin_E_slope_Q3": {"x_label_size": 28,
+                                              "y_label_size": 28,
+                                              "x_tick_size": 24,
+                                              "y_tick_size": 24,
+                                              "violin_line_width": 2.5,
+                                              "marker_size": 8,
+                                              "showlegend": False,
+                                              "height": 820,
+                                              "width": 1320},
+
+    "compare_participant_violin_E_carryover_dtrigger_sd": {"x_label_size": 28,
+                                                           "y_label_size": 28,
+                                                           "x_tick_size": 24,
+                                                           "y_tick_size": 24,
+                                                           "violin_line_width": 2.5,
+                                                           "marker_size": 8,
+                                                           "showlegend": False,
+                                                           "height": 820,
+                                                           "width": 1320},
+
+    "compare_participant_violin_E_carryover_trigger_mean": {"x_label_size": 28,
+                                                            "y_label_size": 28,
+                                                            "x_tick_size": 24,
+                                                            "y_tick_size": 24,
+                                                            "violin_line_width": 2.5,
+                                                            "marker_size": 8,
+                                                            "showlegend": False,
+                                                            "height": 820,
+                                                            "width": 1320},
+
+    "compare_participant_violin_E_carryover_prev_eHMIOn_Q3": {"x_label_size": 28,
+                                                              "y_label_size": 28,
+                                                              "x_tick_size": 24,
+                                                              "y_tick_size": 24,
+                                                              "violin_line_width": 2.5,
+                                                              "marker_size": 8,
+                                                              "showlegend": False,
+                                                              "height": 820,
+                                                              "width": 1320},
+
+    "compare_participant_violin_E_carryover_prev_camera_Q3": {"x_label_size": 28,
+                                                              "y_label_size": 28,
+                                                              "x_tick_size": 24,
+                                                              "y_tick_size": 24,
+                                                              "violin_line_width": 2.5,
+                                                              "marker_size": 8,
+                                                              "showlegend": False,
+                                                              "height": 820,
+                                                              "width": 1320},
+
+    "compare_participant_violin_E_carryover_prev_distPed_Q3": {"x_label_size": 28,
+                                                               "y_label_size": 28,
+                                                               "x_tick_size": 24,
+                                                               "y_tick_size": 24,
+                                                               "violin_line_width": 2.5,
+                                                               "marker_size": 8,
+                                                               "showlegend": False,
+                                                               "height": 820,
+                                                               "width": 1320},
+
+    "reliability_trigger_mean_odd_even": {"x_label_size": 24,
+                                          "y_label_size": 24,
+                                          "x_tick_size": 20,
+                                          "y_tick_size": 20,
+                                          "height": 760,
+                                          "legend_size": 30,
+                                          "legend_y": 0.95,
+                                          "legend_orientation": "v",
+                                          "legend_yanchor": "top",
+                                          "legend_xanchor": "left",
+                                          "legend_x": 0.05,
+                                          "legend_title_text": "",
+                                          },
+
+    "reliability_trigger_mean_early_late": {"x_label_size": 24,
+                                            "y_label_size": 24,
+                                            "x_tick_size": 20,
+                                            "y_tick_size": 20,
+                                            "height": 760,
+                                            "legend_size": 30,
+                                            "legend_y": 0.95,
+                                            "legend_orientation": "v",
+                                            "legend_yanchor": "top",
+                                            "legend_xanchor": "left",
+                                            "legend_x": 0.05,
+                                            "legend_title_text": "",
+                                            },
+
+    "reliability_Q3_odd_even": {"x_label_size": 24,
+                                "y_label_size": 24,
+                                "x_tick_size": 20,
+                                "y_tick_size": 20,
+                                "height": 760,
+                                "legend_size": 30,
+                                "legend_y": 0.95,
+                                "legend_orientation": "v",
+                                "legend_yanchor": "top",
+                                "legend_xanchor": "left",
+                                "legend_x": 0.05,
+                                "legend_title_text": "",
+                                },
+
+    "reliability_Q3_early_late": {"x_label_size": 24,
+                                  "y_label_size": 24,
+                                  "x_tick_size": 20,
+                                  "y_tick_size": 20,
+                                  "height": 760,
+                                  "legend_size": 30,
+                                  "legend_y": 0.95,
+                                  "legend_orientation": "v",
+                                  "legend_yanchor": "top",
+                                  "legend_xanchor": "left",
+                                  "legend_x": 0.05,
+                                  "legend_title_text": "",
+                                  },
 }
 
 PLOT_TEXT_SIZE_BY_PATTERN: List[Tuple[str, Dict[str, Any]]] = [
-    ("compare_participant_violin_E_*", {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_x": 0.98, "legend_y": 0.98, "legend_xanchor": "right", "legend_yanchor": "top", "violin_line_width": 2, "height": 800}),
-    ("compare_participant_violin_breakmatched_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
-    ("compare_participant_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
-    ("compare_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
-    ("curve_time_on_task_*", {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_x": 0.98, "legend_y": 0.98, "legend_xanchor": "right", "legend_yanchor": "top", "line_width": 4, "height": 800}),
-    ("missingness_*_over_trial", {"x_label_size": 26, "y_label_size": 26, "x_tick_size": 22, "y_tick_size": 22, "legend_size": 20, "legend_x": 0.98, "legend_y": 0.98, "legend_xanchor": "right", "legend_yanchor": "top", "line_width": 4, "height": 780}),
-    ("yaw_forward_fraction_by_context*", {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "legend_size": 18, "height": 760}),
-    ("F2_bar_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 18, "y_tick_size": 20, "height": 820}),
-    ("F2_roc_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "legend_size": 18, "height": 760}),
-    ("F1_violin_*", {"x_label_size": 24, "y_label_size": 24, "x_tick_size": 20, "y_tick_size": 20, "height": 760}),
-    ("F1_scatter_*", {"x_label_size": 22, "y_label_size": 22, "x_tick_size": 18, "y_tick_size": 18, "height": 740}),
+    ("compare_participant_violin_E_*", {"x_label_size": 26,
+                                        "y_label_size": 26,
+                                        "x_tick_size": 22,
+                                        "y_tick_size": 22,
+                                        "legend_size": 20,
+                                        "legend_x": 0.98,
+                                        "legend_y": 0.98,
+                                        "legend_xanchor": "right",
+                                        "legend_yanchor": "top",
+                                        "violin_line_width": 2,
+                                        "showlegend": False,
+                                        "height": 800}),
+
+    ("compare_participant_violin_breakmatched_*", {"x_label_size": 24,
+                                                   "y_label_size": 24,
+                                                   "x_tick_size": 20,
+                                                   "y_tick_size": 20,
+                                                   "height": 760}),
+
+    ("compare_participant_violin_*", {"x_label_size": 24,
+                                      "y_label_size": 24,
+                                      "x_tick_size": 20,
+                                      "y_tick_size": 20,
+                                      "height": 760}),
+
+    ("compare_violin_*", {"x_label_size": 24,
+                          "y_label_size": 24,
+                          "x_tick_size": 20,
+                          "y_tick_size": 20,
+                          "height": 760}),
+
+    ("curve_time_on_task_*", {"x_label_size": 26,
+                              "y_label_size": 26,
+                              "x_tick_size": 22,
+                              "y_tick_size": 22,
+                              "legend_size": 20,
+                              "legend_x": 0.98,
+                              "legend_y": 0.98,
+                              "legend_xanchor": "right",
+                              "legend_yanchor": "top",
+                              "line_width": 4,
+                              "height": 800}),
+
+    ("missingness_*_over_trial", {"x_label_size": 26,
+                                  "y_label_size": 26,
+                                  "x_tick_size": 22,
+                                  "y_tick_size": 22,
+                                  "legend_size": 20,
+                                  "legend_x": 0.98,
+                                  "legend_y": 0.98,
+                                  "legend_xanchor": "right",
+                                  "legend_yanchor": "top",
+                                  "line_width": 4,
+                                  "height": 780}),
+
+    ("yaw_forward_fraction_by_context*", {"x_label_size": 22,
+                                          "y_label_size": 22,
+                                          "x_tick_size": 18,
+                                          "y_tick_size": 18,
+                                          "legend_size": 18,
+                                          "height": 760}),
+
+    ("F2_bar_*", {"x_label_size": 24,
+                  "y_label_size": 24,
+                  "x_tick_size": 18,
+                  "y_tick_size": 20,
+                  "height": 820}),
+
+    ("F2_roc_*", {"x_label_size": 24,
+                  "y_label_size": 24,
+                  "x_tick_size": 20,
+                  "y_tick_size": 20,
+                  "legend_size": 18,
+                  "height": 760}),
+
+    ("F1_violin_*", {"x_label_size": 24,
+                     "y_label_size": 24,
+                     "x_tick_size": 20,
+                     "y_tick_size": 20,
+                     "height": 760}),
+
+    ("F1_scatter_*", {"x_label_size": 22,
+                      "y_label_size": 22,
+                      "x_tick_size": 18,
+                      "y_tick_size": 18,
+                      "height": 740}),
 ]
 
 
@@ -184,7 +533,7 @@ def _infer_plot_kind(fig: Any) -> str:
         return "bar"
     if "scatter" in trace_types:
         try:
-            modes = [str(getattr(tr, "mode", "")) for tr in fig.data if str(getattr(tr, "type", "")).lower() == "scatter"]
+            modes = [str(getattr(tr, "mode", "")) for tr in fig.data if str(getattr(tr, "type", "")).lower() == "scatter"]  # noqa:E501
             if any("lines" in m for m in modes):
                 return "line"
         except Exception:
@@ -208,25 +557,30 @@ def apply_plotly_text_style_for_name(fig: Any, name: str) -> Any:
         return fig
     style = _plot_text_style_for_name(fig, name)
     try:
-        fig.update_layout(font=dict(size=style.get("font_size", 18)), title_font=dict(size=style.get("title_size", 20)))
+        fig.update_layout(font=dict(size=style.get("font_size", 18)),
+                          title_font=dict(size=style.get("title_size", 20)))
+        if not style.get("show_title", False):
+            fig.update_layout(title_text=None)
     except Exception:
         pass
     try:
-        fig.update_xaxes(title_font_size=style.get("x_label_size", 20), tickfont_size=style.get("x_tick_size", 16), automargin=True)
+        fig.update_xaxes(title_font_size=style.get("x_label_size", 20),
+                         tickfont_size=style.get("x_tick_size", 16), automargin=True)
     except Exception:
         pass
     try:
-        fig.update_yaxes(title_font_size=style.get("y_label_size", 20), tickfont_size=style.get("y_tick_size", 16), automargin=True)
+        fig.update_yaxes(title_font_size=style.get("y_label_size", 20),
+                         tickfont_size=style.get("y_tick_size", 16), automargin=True)
     except Exception:
         pass
     try:
         legend_update = {
             "font": dict(size=style.get("legend_size", 16)),
-            "title": dict(font=dict(size=style.get("legend_title_size", 17))),
+            "title": dict(
+                text=style.get("legend_title_text", None),
+                font=dict(size=style.get("legend_title_size", 17)),
+            ),
         }
-        preset_name = style.get("legend_position")
-        if preset_name in _LEGEND_LOCATION_PRESETS:
-            legend_update.update(_LEGEND_LOCATION_PRESETS[preset_name])
         for style_key, legend_key in (
             ("legend_x", "x"),
             ("legend_y", "y"),
@@ -243,9 +597,38 @@ def apply_plotly_text_style_for_name(fig: Any, name: str) -> Any:
         fig.update_layout(legend=legend_update)
     except Exception:
         pass
+
+    try:
+        if "showlegend" in style:
+            showlegend = bool(style["showlegend"])
+            fig.update_layout(showlegend=showlegend)
+            for tr in fig.data:
+                try:
+                    tr.showlegend = showlegend
+                except Exception:
+                    pass
+    except Exception:
+        pass
     try:
         if style.get("line_width") is not None:
-            fig.update_traces(line=dict(width=float(style["line_width"])), selector=dict(type="scatter"))
+            lw = float(style["line_width"])
+            for tr in fig.data:
+                try:
+                    if str(getattr(tr, "type", "")).lower() != "scatter":
+                        continue
+                    mode = str(getattr(tr, "mode", ""))
+                    if "lines" not in mode:
+                        continue
+                    line = getattr(tr, "line", None)
+                    current_width = getattr(line, "width", None) if line is not None else None
+                    hoverinfo = str(getattr(tr, "hoverinfo", "") or "").lower()
+                    fill = str(getattr(tr, "fill", "") or "").lower()
+                    # Do not turn hidden confidence-band boundary traces into visible lines.
+                    if current_width == 0 or hoverinfo == "skip" or fill not in {"", "none"}:
+                        continue
+                    tr.line.width = lw
+                except Exception:
+                    pass
     except Exception:
         pass
     try:
@@ -271,10 +654,10 @@ def apply_plotly_text_style_for_name(fig: Any, name: str) -> Any:
     return fig
 
 
-def plotly_export_size_for_name(fig: Any, name: str, width_default: int = 1320, height_default: int = 680) -> Tuple[int, int]:
+def plotly_export_size_for_name(fig: Any, name: str, width_default: int = 1320,
+                                height_default: int = 680) -> Tuple[int, int]:
     style = _plot_text_style_for_name(fig, name)
     return int(style.get("width", width_default)), int(style.get("height", height_default))
-
 
 
 def _coerce_int_config(value, default: int) -> int:
@@ -297,19 +680,20 @@ def _coerce_float_config(value, default=None):
 
 
 def _resolve_plot_style(font_family_override: Optional[str] = None, font_size_override: Optional[int] = None) -> dict:
-    base_family = font_family_override or _safe_get_config('plot_font_family', _safe_get_config('font_family', 'verdana'))
-    base_size_raw = font_size_override if font_size_override is not None else _safe_get_config('plot_font_size', _safe_get_config('font_size', 18))
+    base_family = font_family_override or _safe_get_config('plot_font_family',
+                                                           _safe_get_config('font_family', 'verdana'))
+    base_size_raw = font_size_override if font_size_override is not None else _safe_get_config('plot_font_size',
+                                                                                               _safe_get_config('font_size', 18))  # noqa:E501
     base_size = _coerce_int_config(base_size_raw, 18)
 
     title_size = _coerce_int_config(_safe_get_config('plot_title_font_size', base_size + 2), base_size + 2)
     axis_title_size = _coerce_int_config(_safe_get_config('plot_axis_title_font_size', base_size), base_size)
-    tick_size = _coerce_int_config(_safe_get_config('plot_tick_font_size', max(base_size - 2, 1)), max(base_size - 2, 1))
+    tick_size = _coerce_int_config(_safe_get_config('plot_tick_font_size',
+                                                    max(base_size - 2, 1)), max(base_size - 2, 1))
     legend_size = _coerce_int_config(_safe_get_config('plot_legend_font_size', tick_size), tick_size)
-    legend_title_size = _coerce_int_config(_safe_get_config('plot_legend_title_font_size', axis_title_size), axis_title_size)
-
-    legend_location = str(_safe_get_config('plot_legend_location', 'top_right')).strip().lower()
-    legend_location = legend_location.replace('-', '_').replace(' ', '_')
-    legend = dict(_LEGEND_LOCATION_PRESETS.get(legend_location, _LEGEND_LOCATION_PRESETS['top_right']))
+    legend_title_size = _coerce_int_config(_safe_get_config('plot_legend_title_font_size',
+                                                            axis_title_size), axis_title_size)
+    legend = {'x': 0.99, 'y': 0.99, 'xanchor': 'right', 'yanchor': 'top'}
 
     legend_x = _coerce_float_config(_safe_get_config('plot_legend_x', None), None)
     legend_y = _coerce_float_config(_safe_get_config('plot_legend_y', None), None)
@@ -383,6 +767,19 @@ def apply_global_plotly_style(fig, font_family: Optional[str] = None, font_size:
     return fig
 
 
+def _fig_was_styled_by_csu_core(fig: Any) -> bool:
+    """Return True when csu_core already applied per-figure styling.
+
+    This keeps csu_core.PLOT_TEXT_SIZE_BY_NAME as the single source of truth
+    for figures saved through csu_core._save_plot().
+    """
+    try:
+        meta = getattr(getattr(fig, "layout", None), "meta", None)
+        return isinstance(meta, dict) and bool(meta.get("csu_core_style_applied"))
+    except Exception:
+        return False
+
+
 class HMD_helper:
     def __init__(self, *, dataset: Optional[str] = None, data_folder: Optional[str] = None,
                  output_folder: Optional[str] = None):
@@ -437,9 +834,13 @@ class HMD_helper:
             save_mp4 (bool, optional): save video as MP4 file.
             save_final (bool, optional): whether to also save enabled exports to the figures folder.
         """
-        fig = apply_global_plotly_style(fig)
-        fig = apply_plotly_text_style_for_name(fig, name)
-        width, height = plotly_export_size_for_name(fig, name, width_default=width, height_default=height)
+        # If the figure came from csu_core._save_plot(), it has already been styled
+        # using csu_core.PLOT_TEXT_SIZE_BY_NAME. Do not reapply helper-level
+        # defaults here, otherwise edits in csu_core would be overwritten.
+        if not _fig_was_styled_by_csu_core(fig):
+            fig = apply_global_plotly_style(fig)
+            fig = apply_plotly_text_style_for_name(fig, name)
+            width, height = plotly_export_size_for_name(fig, name, width_default=width, height_default=height)
 
         # disable MathJax globally for Kaleido when available
         try:

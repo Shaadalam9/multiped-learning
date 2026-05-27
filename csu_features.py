@@ -21,7 +21,6 @@ from numpy.typing import NDArray
 import pandas as pd
 
 import plotly.express as px  # noqa:F401
-import plotly.graph_objects as go  # noqa:F401
 
 from custom_logger import CustomLogger
 from helper import HMD_helper
