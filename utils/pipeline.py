@@ -12,6 +12,7 @@ from utils.constants import (
     LOGGER,
 )
 from utils.data_io import (
+    apply_constant_passage_times,
     attach_passage_timing,
     load_mapping,
 )
@@ -86,7 +87,9 @@ def run_analysis(config: StudyConfig) -> dict[str, pd.DataFrame]:
     config.figures.mkdir(parents=True, exist_ok=True)
     fixed_mapping = load_mapping(config.mapping)
     timing_mapping_path = config.timing_mapping or config.mapping
-    timing_mapping = load_mapping(timing_mapping_path)
+    # Constant passage times per vehicle behaviour (and distance), not the
+    # scattered per-condition simulator log.
+    timing_mapping = apply_constant_passage_times(load_mapping(timing_mapping_path))
     try:
         attach_passage_timing(timing_mapping, timing_mapping)
     except ValueError as exc:

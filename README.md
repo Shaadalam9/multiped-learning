@@ -229,7 +229,10 @@ does not invalidate the saved analysis snapshot.
 
 Keep the repository's `mapping.csv`: it supplies participant passage timestamps
 when no explicit timing mapping is configured. A condition-only sequence mapping
-cannot replace this timing information.
+cannot replace this timing information. Because the vehicle followed the same
+scripted trajectory in every trial, the logged passage times are replaced by one
+constant value per vehicle behaviour (first position) or per vehicle behaviour and
+distance (second position), as in the multiped analysis.
 
 ### Analysis settings
 

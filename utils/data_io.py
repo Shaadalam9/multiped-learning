@@ -74,6 +74,42 @@ def load_mapping(path: Path) -> pd.DataFrame:
     return mapping.reset_index(drop=True)
 
 
+def _modal_value(values: pd.Series) -> float:
+    """Most frequent value; ties resolve to the smallest value."""
+    counts = values.round(2).value_counts()
+    top = counts[counts == counts.max()].index
+    return float(min(top))
+
+
+def apply_constant_passage_times(mapping: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy of ``mapping`` with constant passage times.
+
+    The AV followed the same scripted trajectory in every trial of a given
+    vehicle behaviour, so passage times are constant across trials. The logged
+    per-condition times scatter by one to four 20-ms physics steps, so each is
+    replaced by the modal logged value: per vehicle behaviour for the first
+    roadside position (P2) and per vehicle behaviour and inter-pedestrian
+    distance for the second position (P1), which lies d metres downstream.
+    The same schedule is used in the multiped analysis
+    (``human_analysis/utils/vehicle_events.py``).
+    """
+
+    result = mapping.copy()
+    groupings = {
+        "cross_p2_time_s": ["yielding"],
+        "cross_p1_time_s": ["yielding", "distPed"],
+    }
+    for column, keys in groupings.items():
+        if column not in result.columns:
+            continue
+        result[column] = pd.to_numeric(result[column], errors="coerce")
+        for _, index in result.groupby(keys).groups.items():
+            values = result.loc[index, column].dropna()
+            if not values.empty:
+                result.loc[index, column] = _modal_value(values)
+    return result
+
+
 def attach_passage_timing(
     condition_mapping: pd.DataFrame,
     timing_mapping: pd.DataFrame,
