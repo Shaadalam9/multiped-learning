@@ -2,23 +2,10 @@ import logging
 
 
 class CustomLogger:
-    """Logger that handles string formatting.
-
-    Contains a logging.Logger object. Copies the various logging.Logger
-    methods. The purpose is to accept str.format() style formatting.
-    With this custom class, messages may contain '{}' where the next
-    arguments will be placed. Doesn't work with keyword arguments for the
-    formatting.
-
-    Examples
-    --------
-    >>> CustomLogger(__name__)
-    <gazes.CustomLogger object at 0x00000AB32390>
-    """
+    """Application logger supporting standard %-style and legacy {} messages."""
 
     def __init__(self, name):
         self.logger = logging.getLogger(name)
-        self.logger.setLevel(5)
 
     def debug(self, msg, *args, **kwargs):
         self.log(logging.DEBUG, msg, *args, **kwargs)
@@ -35,7 +22,25 @@ class CustomLogger:
     def critical(self, msg, *args, **kwargs):
         self.log(logging.CRITICAL, msg, *args, **kwargs)
 
+    def exception(self, msg, *args, **kwargs):
+        """Log an error with the active exception traceback."""
+        kwargs.setdefault("exc_info", True)
+        self.error(msg, *args, **kwargs)
+
     def log(self, level, msg, *args, **kwargs):
         if self.logger.isEnabledFor(level):
-            msg = msg.format(*args)
-            self.logger._log(level, msg, args=(), **kwargs)
+            if args and "{" in msg:
+                msg = msg.format(*args)
+                args = ()
+            self.logger.log(level, msg, *args, **kwargs)
+
+
+logger = CustomLogger("ordering_comparison")
+
+
+def configure_logging(level: str = "INFO"):
+    """Set up shared console/file handlers and route warnings through logging."""
+    from logmod import logs
+    log_path = logs(show_level=level, save_level=level)
+    logging.captureWarnings(True)
+    return log_path

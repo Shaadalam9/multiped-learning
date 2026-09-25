@@ -1,110 +1,50 @@
-"""Contain function to display or store logging messages."""
+"""Configure shared console and timestamped file logging for the analysis."""
+
 import logging
 import sys
-import os
-import datetime as dt
-from typing import Union, Optional
-import common
+from datetime import datetime, timezone
+from pathlib import Path
 
 
-def logs(
-    show_level: Optional[Union[int, str]] = None,
-    save_level: Optional[Union[int, str]] = None,
-    program_name: Optional[str] = None,
-    path: Optional[str] = None,
-    threads: bool = False,
-    multiproc: bool = False,
-    show_color: bool = True,
-) -> None:
+def logs(show_level: str = "INFO", save_level: str = "INFO",
+         program_name: str = "ordering_comparison", path: Path | None = None) -> Path:
+    """Configure logging once per run and return the UTF-8 log file path.
+
+    Repeated calls replace only handlers created here, avoiding duplicate messages
+    without removing handlers belonging to a notebook or another application.
     """
-    Initialize the logger.
+    console_level = _logging_level(show_level)
+    file_level = _logging_level(save_level)
+    directory = Path(path) if path is not None else Path(__file__).resolve().parent / "_logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S-%fZ")
+    log_path = directory / f"{program_name}_{timestamp}.log"
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    console = logging.StreamHandler(sys.stderr)
+    console.setLevel(console_level)
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(file_level)
 
-    Parameters
-    ----------
-    show_level : int or {'debug', 'info', warning', 'error', 'exception'},
-        optional. Pass a log level to display logs of that level and above.
-    save_level : int or {'debug', 'info', warning', 'error', 'exception'},
-        optional. Pass a log level to store logs of that level and above to
-        a file on disk. If no path is passed the default `_cache` folder will
-        be used.
-    program_name : str, optional
-        When saving logs to disk this string will be used in the filename.
-    path : str, optional
-        Path where log files will be stored. Defaults to the `_cache` folder.
-    threads : bool, default False
-        Add the thread name to log messages. Useful when using threading.
-    multiproc : bool, default False
-        Add the process name to log messages. Useful when using
-        multiprocessing.
-    show_color : bool, default True
-        If you have the coloredlogs package installed the messages will be
-        colored.
-
-    Note that log levels can be one of the listed strings or an integer between
-    1 and 100. If you want to get all possible log messages, use a log level of
-    1.
-    """
-    logger_root = logging.getLogger()
-    fmt_items = (
-        "%(asctime)s",
-        "%(levelname)-8s",
-        "%(threadName)s" if threads else None,
-        "%(processName)s" if multiproc else None,
-        "%(name)s",
-        "%(message)s",
-    )
-    fmt = " - ".join((item for item in fmt_items if item is not None))
-    formatter = logging.Formatter(fmt)
-    logging.addLevelName(5, "VERBOSE")
-    logger_root.setLevel(5)
-
-    if show_level and show_color:
-        try:
-            import coloredlogs
-        except ImportError:
-            show_color = False
-        else:
-            coloredlogs.install(
-                fmt=fmt, level=_convert_logging_level(show_level), stream=sys.stdout
-            )
-    if show_level and not show_color:
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(_convert_logging_level(show_level))
-        stream_handler.setFormatter(formatter)
-        logger_root.addHandler(stream_handler)
-    if save_level:
-        if program_name is None:
-            program_name = "noname"
-        date_str = dt.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
-        log_filename = "log_{}_{}.log".format(program_name, date_str)
-        if path is None:
-            path = common.log_dir
-        file_handler = logging.FileHandler(filename=os.path.join(path, log_filename))
-        file_handler.setFormatter(formatter)
-        file_handler.setLevel(_convert_logging_level(save_level))
-        logger_root.addHandler(file_handler)
-    _logging_level_threshold()
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        if getattr(handler, "_multiped_handler", False):
+            root.removeHandler(handler)
+            handler.close()
+    root.setLevel(min(console_level, file_level))
+    for handler in (console, file_handler):
+        handler.setFormatter(formatter)
+        handler._multiped_handler = True
+        root.addHandler(handler)
+    for name in ("matplotlib", "numexpr", "urllib3", "PIL"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    return log_path
 
 
-def _logging_level_threshold():
-    """
-    Set the level threshold for a couple of internal and external modules.
-    """
-    for mod_name in [
-        "requests",
-        "matplotlib",
-        "numexpr.utils",
-        "urllib3.connectionpool",
-        "PIL.TiffImagePlugin",
-    ]:
-        logging.getLogger(mod_name).setLevel(logging.WARNING)
-
-
-def _convert_logging_level(level: Union[int, str]) -> int:
-    """Convert the user-provided level to a logging level integer."""
-    if isinstance(level, int):
-        assert 0 < level <= 50, "Logging level must be between 0 and 50."
-        return level
-    if not hasattr(logging, level.upper()):
-        raise ValueError("Unknown logging level name: {}.".format(level))
-    return getattr(logging, level.upper())
+def _logging_level(value: str) -> int:
+    """Reject misspelled level names before creating handlers or output files."""
+    levels = {"DEBUG": logging.DEBUG, "INFO": logging.INFO,
+              "WARNING": logging.WARNING, "ERROR": logging.ERROR, "CRITICAL": logging.CRITICAL}
+    try:
+        return levels[value.upper()]
+    except (AttributeError, KeyError) as exc:
+        raise ValueError(f"Unknown logging level: {value}") from exc
