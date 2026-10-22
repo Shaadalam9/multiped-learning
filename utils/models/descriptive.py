@@ -11,6 +11,10 @@ from utils.constants import (
     GROUP_FIXED,
     GROUP_RANDOMISED,
 )
+from utils.models.helpers import (
+    _condition_formula,
+    _fit_gee_with_fallback,
+)
 from utils.models.participants import (
     _hedges_g,
     _welch_difference,
@@ -230,3 +234,131 @@ def sequence_position_audit(trials: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
     return summary
+
+
+HEAD_TURN_THRESHOLD_DEG = 45.0
+
+
+def head_turn_towards_pedestrian(trials: pd.DataFrame) -> pd.DataFrame:
+    """Describe turns away from the vehicle, towards the out-of-view pedestrian side.
+
+    With the participant first (camera 1), the virtual pedestrian stood on the side
+    away from the approaching vehicle; with the participant second it stood between
+    the participant and the vehicle. Head orientation is not eye gaze.
+    """
+
+    frame = trials.dropna(subset=["maximum_heading_deg"]).assign(
+        turned=lambda d: d["maximum_heading_deg"] > HEAD_TURN_THRESHOLD_DEG
+    )
+    records: list[dict[str, Any]] = []
+    for (ordering_group, camera), cell in frame.groupby(["ordering_group", "camera"], observed=True):
+        records.append(_head_turn_record(ordering_group, camera, cell))
+    for camera, cell in frame.groupby("camera", observed=True):
+        records.append(_head_turn_record("both", camera, cell))
+    return pd.DataFrame(records)
+
+
+def _head_turn_record(ordering_group: str, camera: int, cell: pd.DataFrame) -> dict[str, Any]:
+    by_participant = cell.groupby("participant_uid", observed=True)["turned"].any()
+    return {
+        "ordering_group": ordering_group,
+        "pedestrian_position": "Participant first" if camera else "Participant second",
+        "virtual_pedestrian_in_view_towards_vehicle": not bool(camera),
+        "threshold_deg": HEAD_TURN_THRESHOLD_DEG,
+        "trials": int(len(cell)),
+        "trials_turned_pct": float(100.0 * cell["turned"].mean()),
+        "median_maximum_heading_deg": float(cell["maximum_heading_deg"].median()),
+        "median_minimum_heading_deg": float(cell["minimum_heading_deg"].median()),
+        "participants": int(by_participant.size),
+        "participants_turned_at_least_once": int(by_participant.sum()),
+    }
+
+
+FIRST_TRIAL_POSITIONS = ("trial 1", "trials 2 to 3", "trials 4 to 40")
+FIRST_TRIAL_RATINGS = ("Q1", "Q2", "Q3")
+# The single Q2 condition that differed between the groups: always trial 1 in the
+# fixed order group.
+FIRST_FIXED_CONDITION = {"yielding": 1, "eHMIOn": 0, "camera": 0, "distPed_m": 2.0}
+FIRST_TRIAL_POSITION_BANDS = ((1, 5), (6, 20), (21, 40))
+
+
+def _position_band(trial_number: pd.Series) -> pd.Series:
+    return pd.Series(
+        np.where(
+            trial_number == 1,
+            FIRST_TRIAL_POSITIONS[0],
+            np.where(trial_number <= 3, FIRST_TRIAL_POSITIONS[1], FIRST_TRIAL_POSITIONS[2]),
+        ),
+        index=trial_number.index,
+    )
+
+
+def first_trial_rating_check(trials: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Exploratory check of first-trial ratings in the randomised order group.
+
+    Every condition could come first in the randomised order group, so ratings at
+    trial 1 can be compared with later trials after adjusting for condition. The
+    second table follows the one condition that was always first in the fixed
+    order group. Unadjusted for multiplicity; exploratory only.
+    """
+
+    randomised = trials[trials["ordering_group"] == GROUP_RANDOMISED].copy()
+    randomised["position_band"] = _position_band(randomised["trial_number"])
+    reference = FIRST_TRIAL_POSITIONS[2]
+    term = f"C(position_band, Treatment('{reference}'))"
+    rows: list[dict[str, Any]] = []
+    for outcome in FIRST_TRIAL_RATINGS:
+        frame = randomised.dropna(subset=[outcome])
+        result, working = _fit_gee_with_fallback(
+            f"{outcome} ~ {term} + {_condition_formula()}", frame, "gaussian"
+        )
+        intervals = result.conf_int()
+        for band in FIRST_TRIAL_POSITIONS[:2]:
+            name = f"{term}[T.{band}]"
+            rows.append(
+                {
+                    "ordering_group": GROUP_RANDOMISED,
+                    "outcome": outcome,
+                    "position": band,
+                    "reference": reference,
+                    "difference_rating_points": float(result.params[name]),
+                    "ci_low": float(intervals.loc[name, 0]),
+                    "ci_high": float(intervals.loc[name, 1]),
+                    "p_value": float(result.pvalues[name]),
+                    "trials": int((frame["position_band"] == band).sum()),
+                    "working_correlation": working,
+                    "adjustment": "experimental condition; not adjusted for multiplicity",
+                }
+            )
+
+    mask = np.ones(len(trials), dtype=bool)
+    for column, value in FIRST_FIXED_CONDITION.items():
+        mask &= trials[column].to_numpy() == value
+    condition = trials[mask]
+    position_rows: list[dict[str, Any]] = []
+    for low, high in FIRST_TRIAL_POSITION_BANDS:
+        cell = condition[
+            (condition["ordering_group"] == GROUP_RANDOMISED)
+            & condition["trial_number"].between(low, high)
+        ]
+        position_rows.append(
+            {
+                "ordering_group": GROUP_RANDOMISED,
+                "trial_positions": f"{low} to {high}",
+                "participants": int(len(cell)),
+                "mean_Q2": float(cell["Q2"].mean()),
+            }
+        )
+    fixed = condition[condition["ordering_group"] == GROUP_FIXED]
+    position_rows.append(
+        {
+            "ordering_group": GROUP_FIXED,
+            "trial_positions": "1",
+            "participants": int(len(fixed)),
+            "mean_Q2": float(fixed["Q2"].mean()),
+        }
+    )
+    return {
+        "first_trial_rating_check": pd.DataFrame(rows),
+        "first_condition_q2_by_position": pd.DataFrame(position_rows),
+    }
