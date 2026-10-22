@@ -461,6 +461,18 @@ def extract_trial_features(
             result["minimum_heading_deg"] = np.nan
             result["minimum_time_rel_pass_s"] = np.nan
             result["recovered_by_pass_deg"] = np.nan
+        # Largest turn away from the approaching vehicle (positive heading), using
+        # the same smoothing and window as the minimum. When the participant is
+        # first, the virtual pedestrian stands on this side, out of view.
+        if minimum_mask.any():
+            maximum_index = int(candidate_indices[np.argmax(smooth_heading[minimum_mask])])
+            result["maximum_heading_deg"] = float(smooth_heading[maximum_index])
+            result["maximum_time_rel_pass_s"] = float(
+                trajectory["time_seconds"].iloc[maximum_index] - passage
+            )
+        else:
+            result["maximum_heading_deg"] = np.nan
+            result["maximum_time_rel_pass_s"] = np.nan
     else:
         result["heading_baseline_deg"] = np.nan
         result["heading_baseline_samples"] = 0
@@ -480,4 +492,6 @@ def extract_trial_features(
         result["minimum_heading_deg"] = np.nan
         result["minimum_time_rel_pass_s"] = np.nan
         result["recovered_by_pass_deg"] = np.nan
+        result["maximum_heading_deg"] = np.nan
+        result["maximum_time_rel_pass_s"] = np.nan
     return result

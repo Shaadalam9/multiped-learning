@@ -148,6 +148,7 @@ def run_ehmi_learning_models(
     coefficient_tables: list[pd.DataFrame] = []
     effect_rows: list[dict[str, Any]] = []
     change_rows: list[dict[str, Any]] = []
+    trajectory_rows: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
 
     for progression in progression_specs:
@@ -233,6 +234,33 @@ def run_ehmi_learning_models(
                         }
                     )
 
+            if progression["name"] == "trial_position":
+                # The full trajectory behind the trial 1 versus trial 40 summary.
+                for ordering_group in [GROUP_RANDOMISED, GROUP_FIXED]:
+                    for trial_number in range(1, 41):
+                        effect, gradient = _ehmi_effect_components(
+                            result,
+                            design_info,
+                            ordering_group,
+                            {
+                                "trial_scaled": (trial_number - 20.5) / 10.0,
+                                "break_segment": _break_segment(float(trial_number)),
+                            },
+                            link,
+                        )
+                        trajectory_rows.append(
+                            {
+                                "outcome": outcome,
+                                "outcome_label": spec["label"],
+                                "ordering_group": ordering_group,
+                                "ordering_group_label": GROUP_LABELS[ordering_group],
+                                "trial_number": trial_number,
+                                "contrast": "eHMI on minus off within yielding trials",
+                                **_delta_contrast(result, effect, gradient, scale),
+                                "units": spec["units"],
+                            }
+                        )
+
             changes: dict[str, tuple[float, np.ndarray]] = {}
             for ordering_group in [GROUP_RANDOMISED, GROUP_FIXED]:
                 late_effect, late_gradient = components[
@@ -307,6 +335,7 @@ def run_ehmi_learning_models(
         ),
         "ehmi_learning_effects": pd.DataFrame(effect_rows),
         "ehmi_learning_change_tests": changes,
+        "ehmi_learning_trajectory": pd.DataFrame(trajectory_rows),
         "ehmi_learning_failures": pd.DataFrame(
             failures, columns=["progression_metric", "outcome", "reason"]
         ),

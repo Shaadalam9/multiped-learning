@@ -31,6 +31,8 @@ from utils.models.demographics import (
 )
 from utils.models.descriptive import (
     carryover_analysis,
+    first_trial_rating_check,
+    head_turn_towards_pedestrian,
     sequence_position_audit,
     temporal_descriptives,
 )
@@ -203,6 +205,8 @@ def run_analysis(config: StudyConfig) -> dict[str, pd.DataFrame]:
         "participant_carryover_metrics": carryover_participant,
         "carryover_comparisons": carryover_tests,
         "sequence_position_associations": sequence_position_audit(trials),
+        "head_turn_towards_pedestrian": head_turn_towards_pedestrian(trials),
+        **first_trial_rating_check(trials),
         "demographic_adjusted_participant_outcomes": adjusted_participant_outcomes,
         **primary,
         **secondary,

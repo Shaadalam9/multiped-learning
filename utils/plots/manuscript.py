@@ -10,6 +10,7 @@ import json
 from custom_logger import logger
 import pandas as pd
 import plotly.graph_objects as go
+from scipy import stats
 import plotly.io as pio
 from plotly.subplots import make_subplots
 from utils.plots.setup import experimental_setup
@@ -24,13 +25,15 @@ FIGURE_LABELS = {
     'trial_sequence': 'fig:sequence',
     'distance_ratings': 'fig:q2',
     'session_changes': 'fig:segments',
+    'ehmi_change': 'fig:ehmi',
+    'trial_profile': 'fig:profile',
 }
 
 
 def generate(source, destination):
     destination.mkdir(parents=True, exist_ok=True)
     files = ['trial_level_common_window.csv', 'condition_cell_contrasts.csv',
-             'session_segment_predictions.csv']
+             'session_segment_predictions.csv', 'ehmi_learning_trajectory.csv']
     tables = {name: pd.read_csv(source / name) for name in files}
     trials = tables[files[0]]
     if len(trials) != 4000 or trials.participant_uid.nunique() != 100:
@@ -128,8 +131,72 @@ def generate(source, destination):
                           row=1, col=col)
         fig.update_xaxes(tickvals=[0, 1, 2], ticktext=['1–14', '15–26', '27–40'], title_text='Trials', row=1, col=col)
     save(fig, 'session_changes', 1200, 430)
+
+    trajectory = tables[files[3]]
+    outcomes = [('unsafe_pct', 'A. Crossing judged unsafe', 'eHMI on − off (percentage points)'),
+                ('Q3', 'B. Understanding of vehicle intention', 'eHMI on − off (rating points)')]
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=.12, subplot_titles=[title for _, title, _ in outcomes])
+    for col, (outcome, _, axis_title) in enumerate(outcomes, 1):
+        for group in LABELS:
+            rows = trajectory[(trajectory.outcome == outcome) & (trajectory.ordering_group == group)
+                              ].sort_values('trial_number')
+            if list(rows.trial_number) != list(range(1, 41)):
+                raise ValueError(f'Missing eHMI trajectory for {outcome}, {group}')
+            band = 'rgba(0,114,178,.15)' if group == 'randomised_order' else 'rgba(213,94,0,.15)'
+            fig.add_trace(go.Scatter(x=list(rows.trial_number) + list(rows.trial_number[::-1]),
+                                     y=list(rows.ci_high) + list(rows.ci_low[::-1]), fill='toself',
+                                     fillcolor=band, line=dict(width=0), hoverinfo='skip',
+                                     legendgroup=group, showlegend=False), row=1, col=col)
+            fig.add_trace(go.Scatter(x=rows.trial_number, y=rows.estimate, mode='lines', name=LABELS[group],
+                                     legendgroup=group, showlegend=col == 1,
+                                     line=dict(color=COLOURS[group], width=2.5,
+                                               dash='solid' if group == 'randomised_order' else 'dot')),
+                          row=1, col=col)
+        fig.add_hline(y=0, line_color='#999', line_width=1, row=1, col=col)
+        for boundary in (14.5, 26.5):
+            fig.add_vline(x=boundary, line_dash='dot', line_color='#bbb', row=1, col=col)
+        fig.update_xaxes(title_text='Trial position', range=[1, 40], row=1, col=col)
+        fig.update_yaxes(title_text=axis_title, row=1, col=col)
+    save(fig, 'ehmi_change', 1100, 460)
+
+    # Unadjusted perceived crossing safety at each trial position. In the fixed
+    # group each position is one condition, so the line follows the sequence.
+    fixed_yielding = fixed.drop_duplicates('trial_number').set_index('trial_number').sort_index().yielding
+    runs, start = [], None
+    for trial, value in fixed_yielding.items():
+        if value == 0 and start is None:
+            start = trial
+        if value != 0 and start is not None:
+            runs.append((start, trial - 1))
+            start = None
+    if start is not None:
+        runs.append((start, int(fixed_yielding.index.max())))
+    run_start, run_end = max(runs, key=lambda run: run[1] - run[0])
+    fig = go.Figure()
+    fig.add_vrect(x0=run_start - .5, x1=run_end + .5, fillcolor='#eeeeee', line_width=0, layer='below')
+    fig.add_annotation(x=(run_start + run_end) / 2, y=1, yref='paper', yshift=8, showarrow=False,
+                       text=f'Fixed order: non-yielding vehicle in trials {run_start}–{run_end}',
+                       font=dict(size=13, color='#555'))
+    for boundary in (14.5, 26.5):
+        fig.add_vline(x=boundary, line_dash='dot', line_color='#bbb')
+    for group in LABELS:
+        rows = trials[trials.ordering_group == group].groupby('trial_number').unsafe_pct
+        mean, sem, count = rows.mean(), rows.sem(), rows.count()
+        half = sem * stats.t.ppf(.975, count - 1)
+        band = 'rgba(0,114,178,.15)' if group == 'randomised_order' else 'rgba(213,94,0,.15)'
+        fig.add_trace(go.Scatter(x=list(mean.index) + list(mean.index[::-1]),
+                                 y=list(mean + half) + list((mean - half)[::-1]), fill='toself',
+                                 fillcolor=band, line=dict(width=0), hoverinfo='skip',
+                                 legendgroup=group, showlegend=False))
+        fig.add_trace(go.Scatter(x=mean.index, y=mean, mode='lines+markers', name=LABELS[group],
+                                 legendgroup=group, marker=dict(size=5),
+                                 line=dict(color=COLOURS[group], width=2,
+                                           dash='solid' if group == 'randomised_order' else 'dot')))
+    fig.update_xaxes(title_text='Trial position', range=[.5, 40.5], dtick=5)
+    fig.update_yaxes(title_text='Crossing judged unsafe (%)', range=[0, 100])
+    save(fig, 'trial_profile', 1100, 480)
     (destination / 'source_manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     index = {label: {extension: f'{name}.{extension}' for extension in ('pdf', 'png', 'html', 'pickle')}
              for name, label in FIGURE_LABELS.items()}
     (destination / 'figure_index.json').write_text(json.dumps(index, indent=2) + '\n')
-    logger.info('Generated all four manuscript figures in %s', destination)
+    logger.info('Generated all %d manuscript figures in %s', len(FIGURE_LABELS), destination)

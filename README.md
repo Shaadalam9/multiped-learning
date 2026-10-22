@@ -4,6 +4,76 @@ This project compares fixed and participant-specific randomised trial order in a
 VR pedestrian experiment. Run one Python file to produce the analysis tables,
 saved results and figures used by the manuscript.
 
+## Main findings
+
+The fixed order group (50 participants, one shared sequence) and the randomised
+order group (50 different participants, a new random sequence each) completed the
+same 40 conditions: vehicle behaviour (yielding or not) × eHMI (off or on) ×
+pedestrian position (participant first or second) × distance between the
+pedestrians (2, 4, 6, 8 or 10 m). The groups were tested at different times and
+were not randomly assigned, so differences cannot be attributed to trial order
+alone. All numbers below are produced by `main.py` and stored in `_output/`.
+
+**1. The fixed sequence was itself random, but shared.** Both studies used the same
+Unity shuffle. In the fixed order study it was run once and reused for everyone, so
+each condition always occupied the same trial position.
+
+![Experimental factors at each trial position](figures/trial_sequence.png)
+
+**2. The main conclusions about the experimental factors were the same.** Yielding,
+the eHMI and pedestrian position had the same effects on perceived crossing safety
+in both groups. The effect had the same direction in 10 of 12 comparisons, and none
+of the 12 group differences was significant after Holm adjustment (smallest adjusted
+p = .09; `primary_condition_effect_contrasts.csv`). Averaged over all conditions,
+crossing was judged unsafe in 40.48% of 100 ms intervals in the randomised order
+group and 42.82% in the fixed order group (difference 2.34 percentage points,
+95% CI [−5.16, 9.83], p = .54). This result did not depend on the trigger threshold,
+bootstrap or Bayesian resampling, leaving out single participants, or adjustment for
+age, gender and VR experience.
+
+**3. Only the condition that always came first differed.** Of 600 condition-by-condition
+comparisons (40 conditions × 15 outcomes), one was significant after adjustment for
+all 600. In the condition presented first in the fixed sequence (yielding vehicle,
+eHMI off, vehicle stopping for the virtual pedestrian 2 m from the participant), the
+fixed order group rated the influence of the distance to the other pedestrian (Q2)
+23.34 points lower (53.41 versus 30.08; simultaneous 95% CI [−40.93, −5.74],
+adjusted p = .011). Perceived crossing safety in that condition did not differ
+(adjusted p = 1.00).
+
+![Q2 differences and position of the first condition](figures/distance_ratings.png)
+
+**4. Change over the session was badly distorted by the fixed sequence.** Trials 30–39
+of the fixed sequence all had a non-yielding vehicle. Without accounting for the
+conditions, the fixed order data therefore suggest a large rise in judged unsafety
+towards the end of the session (+21.76 percentage points from the first ten to the
+last ten trials, against +2.88 in the randomised order group; difference 18.88,
+95% CI [11.04, 26.72], adjusted p < .001). Models that account for the conditions show
+no difference between the groups in change over the session (p = .54).
+
+![Perceived crossing safety at each trial position](figures/trial_profile.png)
+
+**5. The eHMI became more informative with experience in both groups.** In yielding
+trials, the eHMI on/off difference in understanding of the vehicle's intention (Q3)
+widened from trial 1 to trial 40 (randomised order: +17.81 points, adjusted p = .002;
+fixed order: +11.85, adjusted p = 1.00); the change did not differ between the groups
+(p = .67). Only in the randomised order group can this be attributed to experience,
+because in the fixed sequence the late trials were always the same conditions.
+
+![eHMI on/off difference across the 40 trials](figures/ehmi_change.png)
+
+**Practical message.** A study that used one sequence for everyone can still support
+conclusions about the average effect of a factor, provided each factor level occurs
+throughout the sequence. Results for single conditions early in the sequence, and any
+change over the session, should not be trusted. Randomise the order separately for
+each participant (or counterbalance it); randomising once and giving the same sequence
+to everyone does not help.
+
+Two further checks support the interpretation: participants turned their heads more
+than 45° towards the virtual pedestrian in 59.20% of trials in which it stood out of
+view (`head_turn_towards_pedestrian.csv`), and in the randomised order group Q2 ratings
+in trial 1 were not generally lower than later ratings (difference 1.84 points,
+p = .67; `first_trial_rating_check.csv`).
+
 ## Run the project
 
 From the project folder, using the existing environment:
@@ -282,10 +352,10 @@ The usual output locations are:
 | `_output/` | CSV result tables, analysis notes and numerical summaries |
 | `_output/analysis_results.pickle` | Saved result DataFrames, not fitted model objects |
 | `_output/analysis_results.json` | Snapshot provenance, checksums and compatibility information |
-| `_output/figures/` | 19 analysis figures, four manuscript figures and manifests |
+| `_output/figures/` | 19 analysis figures, six manuscript figures and manifests |
 | Configured `figures` folder | HTML and PNG copies only, when `save_final` is `true` |
 | `_logs/` | Timestamped console/file logs for each execution |
-| `latex/` | Manuscript sources, bibliography and LaTeX supporting files |
+| `paper/` (local only, not in this repository) | Manuscript sources, bibliography and LaTeX supporting files |
 
 Each Python-generated figure is exported as PDF, PNG, interactive HTML and an
 editable Plotly pickle. Analysis figures also attempt EPS export. A failure in a
@@ -293,9 +363,8 @@ required export makes the command fail rather than report success.
 
 The main command also exports the experimental-setup schematic as PDF, PNG,
 HTML and pickle. Earlier manuscript versions embed a TikZ version of this
-schematic, but no LaTeX installation is needed to generate the Python figure. Select `cas-sc-template.tex` as the main document in Overleaf; compile the
-anonymous manuscript separately. Do not include one complete manuscript inside
-the other.
+schematic, but no LaTeX installation is needed to generate the Python figure. The manuscript is kept outside this public repository until it is published;
+its main document is `cas-sc-template.tex`.
 
 A snapshot from fresh analysis retains unrounded table values. A snapshot adopted
 from CSV retains the precision of those exported tables. Code, configuration and
@@ -304,7 +373,7 @@ is verified. Only load pickle files produced by this trusted project.
 
 ## Figures: what is generated
 
-The Python command generates 19 analysis plots and four manuscript figures for the
+The Python command generates 19 analysis plots and six manuscript figures for the
 current complete dataset. Some analysis plots are conditional on having suitable
 model results; a different or incomplete dataset may produce fewer plots.
 Each filename below has `.pdf`, `.png`, `.html` and `.pickle` versions. PDF is
@@ -319,12 +388,14 @@ to editing the Plotly figure in Python. EPS is optional for analysis plots.
 | 2 | `_output/figures/trial_sequence` | How experimental factors are distributed over trial positions in each group |
 | 3 | `_output/figures/distance_ratings` | Q2 differences for the selected yielding/eHMI-off/participant-second conditions and the position of the 2 m condition |
 | 4 | `_output/figures/session_changes` | Model-adjusted responses over the three parts of the experiment |
+| 5 | `_output/figures/trial_profile` | Unadjusted perceived crossing safety at each trial position, with the fixed sequence's run of non-yielding trials marked |
+| 6 | `_output/figures/ehmi_change` | eHMI on/off difference in yielding trials across the 40 trials |
 
-All four manuscript figures are built by `utils/plots/manuscript.py`, called automatically
+All six manuscript figures are built by `utils/plots/manuscript.py`, called automatically
 through the plotting package by `main.py`. Their inputs are `trial_level_common_window.csv`,
-`condition_cell_contrasts.csv` and `session_segment_predictions.csv`.
+`condition_cell_contrasts.csv`, `session_segment_predictions.csv` and `ehmi_learning_trajectory.csv`.
 `_output/figures/source_manifest.json` records hashes of those source tables.
-The setup schematic is drawn by `utils/plots/setup.py`; all four manuscript
+The setup schematic is drawn by `utils/plots/setup.py`; all six manuscript
 figures are generated by `python main.py`. Analysis plot numbers below are independent of manuscript
 figure numbers.
 
@@ -372,7 +443,9 @@ results report.
 | How did the groups differ overall? | `primary_marginal_estimates.csv`, `primary_marginal_contrasts.csv`, `participant_level_descriptives.csv`, `participant_level_comparisons.csv` |
 | What happened within individual conditions? | `condition_cell_estimates.csv`, `condition_cell_contrasts.csv`, `condition_cell_followup_summary.csv` |
 | Did responses change over the session? | `session_segment_predictions.csv`, `session_segment_tests.csv`, `temporal_adjusted_tests.csv` |
-| Did the eHMI difference change with experience? | `ehmi_learning_effects.csv`, `ehmi_learning_change_tests.csv` |
+| Did the eHMI difference change with experience? | `ehmi_learning_effects.csv`, `ehmi_learning_change_tests.csv`, `ehmi_learning_trajectory.csv` |
+| Did participants turn towards the virtual pedestrian? | `head_turn_towards_pedestrian.csv` (descriptive; head orientation, not gaze) |
+| Are first-trial ratings different in general? | `first_trial_rating_check.csv`, `first_condition_q2_by_position.csv` (exploratory, randomised order group) |
 | What about demographic differences? | `baseline_demographic_descriptives.csv`, `baseline_demographic_comparisons.csv`, `demographic_adjusted_primary_contrast.csv` |
 | Are the primary findings sensitive to analysis choices? | `primary_cluster_bootstrap_summary.csv`, `primary_bayesian_bootstrap_summary.csv`, `primary_leave_one_participant_out_summary.csv`, `primary_design_audit_sensitivity.csv` |
 | Did model fitting fail? | `model_failures.csv`, `secondary_model_failures.csv`, and the other `*_failures.csv` files |
