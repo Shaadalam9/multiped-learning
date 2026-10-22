@@ -111,8 +111,9 @@ def generate(source, destination):
     save(fig, 'distance_ratings', 1100, 460)
 
     segments = tables[files[2]]
-    outcomes = [('unsafe_pct', 'Crossing judged unsafe (%)'), ('Q3', 'Vehicle intention understanding'),
-                ('heading_yaw_activity_deg_s', 'Head yaw activity (degrees/s)')]
+    outcomes = [('unsafe_pct', 'A. Crossing judged unsafe (%)'),
+                ('Q3', 'B. Understanding of vehicle intention (Q3)'),
+                ('heading_yaw_activity_deg_s', 'C. Head yaw rate (degrees/s)')]
     fig = make_subplots(rows=1, cols=3, horizontal_spacing=.10, subplot_titles=[title for _, title in outcomes])
     order = ['before_break_14', 'after_break_14', 'after_break_26']
     for col, (outcome, _) in enumerate(outcomes, 1):
